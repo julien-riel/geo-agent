@@ -143,8 +143,9 @@ class DatasetMeta(BaseModel):
 | `select_features` | Charge des features depuis le WFS via filtre OGC | `layer`, `geometry_filter` (polygon depuis drawing OU dataset_id), `spatial_predicate` (intersects/within/contains/dwithin), `attribute_filter` (optionnel), `alias` | nouveau `dataset_id` + meta |
 | `aggregate` | Stats sur un dataset | `dataset_id`, `op` (count/sum/mean/min/max), `attribute`, `group_by` (optionnel) | résultat textuel + (optionnel) nouveau dataset si group_by |
 | `filter_attributes` | Filtre attributaire local | `dataset_id`, `predicate`, `alias` | nouveau `dataset_id` |
-| `show_on_map` / `hide_on_map` | Toggle de visibilité (mute `active_layers`) | `dataset_id` | — |
+| `show_on_map` / `hide_on_map` | Toggle de visibilité (modifie `active_layers`) | `dataset_id` | — |
 | `describe_dataset` | Récupère les meta d'un dataset (l'agent peut s'y référer sans relire le fichier) | `dataset_id` ou `alias` | meta complet |
+| `list_datasets` | Liste tous les datasets disponibles (alias + ID + count) | — | liste de `DatasetMeta` allégés |
 
 `select_features` accepte soit le polygone courant (`current_drawing`), soit un `dataset_id` source pour le chaînage. Dans le second cas, on prend la **bbox unionnée** par défaut (rapide, filtre côté serveur), avec option `use_geometry: true` pour utiliser la géométrie complète (filtre Intersects précis, mais payload plus gros — cap de taille du body XML).
 
@@ -387,7 +388,8 @@ geo-agent/
 │   │   │       ├── aggregate.py
 │   │   │       ├── filter_attributes.py
 │   │   │       ├── show_on_map.py
-│   │   │       └── describe_dataset.py
+│   │   │       ├── describe_dataset.py
+│   │   │       └── list_datasets.py
 │   │   ├── services/
 │   │   │   ├── wfs_client.py
 │   │   │   ├── ogc_filter.py
