@@ -2,3 +2,24 @@ node_modules/
 dist/
 .mcp.json
 
+# data
+/data/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# next
+.next/
+.turbo/
+
+# IDE
+.vscode/
+.idea/
+
+# tests
+playwright-report/
+test-results/
