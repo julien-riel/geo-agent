@@ -193,16 +193,16 @@ This is the canonical path for a question like *"Find the streets that intersect
 sequenceDiagram
     autonumber
     participant U as User
-    participant FE as Frontend (GeoPage)
+    participant FE as "Frontend (GeoPage)"
     participant CK as CopilotKit runtime
-    participant API as /api/copilotkit (Next.js)
-    participant BE as /agents/geo-agent (FastAPI)
+    participant API as "/api/copilotkit (Next.js)"
+    participant BE as "/agents/geo-agent (FastAPI)"
     participant G as LangGraph REACT
-    participant L as Ollama (Gemma 4)
+    participant L as "Ollama (Gemma 4)"
     participant T as select_features
     participant W as WFS server
     participant S as result_store
-    participant FS as data/results/
+    participant FS as "data/results/"
 
     U->>FE: "Find streets in zone_1"
     FE->>CK: append message + agentState
@@ -285,12 +285,12 @@ A user-drawn polygon is treated like any other dataset. There is no special "use
 sequenceDiagram
     autonumber
     participant U as User
-    participant DT as DrawTool (Terra Draw)
+    participant DT as "DrawTool (Terra Draw)"
     participant GP as GeoPage
-    participant API as /api/datasets/drawing
-    participant DR as routes/datasets.py
+    participant API as "/api/datasets/drawing"
+    participant DR as "routes/datasets.py"
     participant S as result_store
-    participant FS as data/results/
+    participant FS as "data/results/"
     participant ML as MapLibre
 
     U->>DT: double-click finishes polygon
@@ -345,12 +345,12 @@ End-to-end, a single user turn looks like this:
 sequenceDiagram
     autonumber
     participant U as User
-    participant Map as Map / Draw
+    participant Map as "Map / Draw"
     participant Chat as CopilotSidebar
     participant GP as GeoPage
-    participant API as Next.js API routes
-    participant BE as FastAPI + agent
-    participant FS as data/results/
+    participant API as "Next.js API routes"
+    participant BE as "FastAPI + agent"
+    participant FS as "data/results/"
 
     U->>Map: draw polygon
     Map->>GP: onPolygon
