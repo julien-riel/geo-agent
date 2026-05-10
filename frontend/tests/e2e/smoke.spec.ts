@@ -76,3 +76,73 @@ test("draw zone creates a dataset card and map layer", async ({ page }) => {
   const checkbox = page.getByRole("checkbox", { name: /zone_1/i });
   await expect(checkbox).toBeChecked();
 });
+
+test("clicking Nouveau resets chat and dataset panel", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("canvas")).toBeVisible();
+
+  await page.route("**/api/datasets/drawing", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "result_001",
+        alias: "zone_1",
+        feature_count: 1,
+        bbox: [-73.6, 45.5, -73.55, 45.55],
+        layer: null,
+        operation: "user_drawing",
+      }),
+    });
+  });
+
+  // Close the chat sidebar so we can interact with the canvas underneath.
+  await page.evaluate(() => {
+    const closeBtn = document.querySelector('button[aria-label="Close Chat"]') as HTMLElement | null;
+    closeBtn?.click();
+  });
+  await page.getByRole("button", { name: /Dessiner zone/i }).click();
+  await page.waitForFunction(() => {
+    const c = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
+    return c ? getComputedStyle(c).cursor === "crosshair" : false;
+  }, { timeout: 5000 });
+  await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
+    if (!canvas) throw new Error("MapLibre canvas not found");
+    const opts = (x: number, y: number): PointerEventInit => ({
+      clientX: x, clientY: y, bubbles: true, cancelable: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1,
+    });
+    function pclick(x: number, y: number) {
+      canvas.dispatchEvent(new PointerEvent("pointermove", opts(x, y)));
+      canvas.dispatchEvent(new PointerEvent("pointerdown", opts(x, y)));
+      canvas.dispatchEvent(new PointerEvent("pointerup", opts(x, y)));
+    }
+    pclick(300, 250); pclick(500, 250); pclick(500, 400); pclick(300, 400);
+    canvas.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    canvas.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+  });
+
+  // Pre-condition: dataset card is present.
+  await expect(page.getByText("zone_1", { exact: false })).toBeVisible({ timeout: 5000 });
+
+  // Re-open the chat sidebar.
+  await page.evaluate(() => {
+    const open = document.querySelector('button[aria-label="Open Chat"]') as HTMLElement | null;
+    open?.click();
+  });
+
+  // Click the "Nouveau" button via JS to avoid cpk-web-inspector pointer interception.
+  await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll("button")).find(
+      (b) => /Nouvelle conversation/i.test(b.getAttribute("aria-label") ?? b.textContent ?? "")
+    ) as HTMLElement | undefined;
+    if (!btn) throw new Error("Nouvelle conversation button not found");
+    btn.click();
+  });
+  await page.waitForTimeout(500);
+
+  // Post-conditions: dataset panel is empty AND no more zone_1 card.
+  await expect(page.getByText("Aucun dataset", { exact: false })).toBeVisible({ timeout: 8000 });
+  await expect(page.getByText("zone_1", { exact: false })).toHaveCount(0);
+});

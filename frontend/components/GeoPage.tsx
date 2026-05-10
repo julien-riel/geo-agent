@@ -14,6 +14,11 @@ import { AgentState, DatasetMetaLite } from "@/lib/types";
 
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
+  // datasets and active_layers live here (outside ThreadsProvider) so that:
+  // 1. They are cleared explicitly on "Nouveau" without remounting MapView.
+  // 2. MapView stays mounted, avoiding headless-browser crashes on remount.
+  const [datasets, setDatasets] = useState<DatasetMetaLite[]>([]);
+  const [activeLayers, setActiveLayers] = useState<string[]>([]);
 
   useEffect(() => {
     setThreadId(getOrCreateThreadId());
@@ -22,19 +27,45 @@ export function GeoPage() {
   const onNewConversation = () => {
     const fresh = resetThreadId();
     setThreadId(fresh);
+    setDatasets([]);
+    setActiveLayers([]);
   };
 
   if (!threadId) return null;
 
+  // No key on ThreadsProvider — GeoPageBody stays mounted across thread changes.
+  // State is cleared explicitly in onNewConversation above.
   return (
-    <ThreadsProvider key={threadId} threadId={threadId}>
-      <GeoPageBody onNewConversation={onNewConversation} />
+    <ThreadsProvider threadId={threadId}>
+      <GeoPageBody
+        threadId={threadId}
+        onNewConversation={onNewConversation}
+        datasets={datasets}
+        setDatasets={setDatasets}
+        activeLayers={activeLayers}
+        setActiveLayers={setActiveLayers}
+      />
     </ThreadsProvider>
   );
 }
 
-function GeoPageBody({ onNewConversation }: { onNewConversation: () => void }) {
-  const { state, setState } = useCoAgent<AgentState>({
+interface GeoPageBodyProps {
+  threadId: string;
+  onNewConversation: () => void;
+  datasets: DatasetMetaLite[];
+  setDatasets: React.Dispatch<React.SetStateAction<DatasetMetaLite[]>>;
+  activeLayers: string[];
+  setActiveLayers: React.Dispatch<React.SetStateAction<string[]>>;
+}
+
+function GeoPageBody({
+  onNewConversation,
+  datasets,
+  setDatasets,
+  activeLayers,
+  setActiveLayers,
+}: GeoPageBodyProps) {
+  const { state: agentState } = useCoAgent<AgentState>({
     name: "geo-agent",
     initialState: { datasets: [], active_layers: [], last_error: null },
   });
@@ -60,36 +91,28 @@ function GeoPageBody({ onNewConversation }: { onNewConversation: () => void }) {
       return;
     }
     const meta = (await r.json()) as DatasetMetaLite;
-    const currentDatasets = state?.datasets ?? [];
-    const currentActive = state?.active_layers ?? [];
-    setState({
-      ...(state ?? { datasets: [], active_layers: [], last_error: null }),
-      datasets: [...currentDatasets, meta],
-      active_layers: [...currentActive, meta.id],
-    });
+    setDatasets((prev) => [...prev, meta]);
+    setActiveLayers((prev) => [...prev, meta.id]);
   };
 
   const onToggle = (id: string) => {
-    const current = state?.active_layers || [];
-    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-    setState({
-      ...(state ?? { datasets: [], active_layers: [], last_error: null }),
-      active_layers: next,
-    });
+    setActiveLayers((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
   };
 
   return (
     <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
       <MapView>
         {drawing && <DrawTool onPolygon={onPolygon} />}
-        {state?.active_layers?.map((id) => (
+        {activeLayers.map((id) => (
           <DatasetLayer key={id} datasetId={id} />
         ))}
       </MapView>
 
       <DatasetPanel
-        datasets={(state?.datasets as DatasetMetaLite[]) || []}
-        activeLayers={state?.active_layers || []}
+        datasets={datasets}
+        activeLayers={activeLayers}
         onToggle={onToggle}
         onDraw={onDraw}
         drawingActive={drawing}
