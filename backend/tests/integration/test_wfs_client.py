@@ -1,0 +1,36 @@
+from pathlib import Path
+
+import httpx
+import pytest
+import respx
+
+from geo_agent.services.wfs_client import WFSClient
+
+
+@pytest.fixture
+def capabilities_xml() -> bytes:
+    return (Path(__file__).parent.parent / "fixtures" / "wfs_capabilities_2.0.0.xml").read_bytes()
+
+
+@respx.mock
+async def test_get_layers_fetches_and_caches(tmp_path: Path, capabilities_xml: bytes) -> None:
+    base = "https://example.test/wfs"
+    route = respx.get(base).mock(return_value=httpx.Response(200, content=capabilities_xml))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path, http_timeout_seconds=10)
+
+    layers1 = await client.get_layers()
+    layers2 = await client.get_layers()
+
+    assert len(layers1) >= 2
+    assert layers1 == layers2
+    assert route.call_count == 1  # second call hit the cache
+
+
+async def test_get_layers_loads_from_disk_cache(tmp_path: Path, capabilities_xml: bytes) -> None:
+    (tmp_path / "wfs_capabilities_cache.xml").write_bytes(capabilities_xml)
+
+    client = WFSClient(base_url="https://example.test/wfs", cache_dir=tmp_path, http_timeout_seconds=10)
+    # No respx.mock — if it tried to call HTTP, it would fail
+    layers = await client.get_layers()
+    assert len(layers) >= 2
