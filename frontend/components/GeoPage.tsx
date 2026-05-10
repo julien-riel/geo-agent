@@ -1,6 +1,6 @@
 "use client";
 
-import { ThreadsProvider, useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
+import { ThreadsProvider, useCoAgent, useCoAgentStateRender, useCopilotMessagesContext } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useEffect, useState } from "react";
 
@@ -14,9 +14,9 @@ import { AgentState, DatasetMetaLite } from "@/lib/types";
 
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
-  // datasets and active_layers live here (outside ThreadsProvider) so that:
-  // 1. They are cleared explicitly on "Nouveau" without remounting MapView.
-  // 2. MapView stays mounted, avoiding headless-browser crashes on remount.
+  // datasets and active_layers live in this outer component (not inside ThreadsProvider)
+  // so resetting threadId can clear them without remounting MapView (which crashes
+  // headless browsers on rapid remount).
   const [datasets, setDatasets] = useState<DatasetMetaLite[]>([]);
   const [activeLayers, setActiveLayers] = useState<string[]>([]);
 
@@ -24,22 +24,13 @@ export function GeoPage() {
     setThreadId(getOrCreateThreadId());
   }, []);
 
-  const onNewConversation = () => {
-    const fresh = resetThreadId();
-    setThreadId(fresh);
-    setDatasets([]);
-    setActiveLayers([]);
-  };
-
   if (!threadId) return null;
 
-  // No key on ThreadsProvider — GeoPageBody stays mounted across thread changes.
-  // State is cleared explicitly in onNewConversation above.
   return (
     <ThreadsProvider threadId={threadId}>
       <GeoPageBody
         threadId={threadId}
-        onNewConversation={onNewConversation}
+        setThreadId={setThreadId}
         datasets={datasets}
         setDatasets={setDatasets}
         activeLayers={activeLayers}
@@ -51,7 +42,7 @@ export function GeoPage() {
 
 interface GeoPageBodyProps {
   threadId: string;
-  onNewConversation: () => void;
+  setThreadId: (id: string) => void;
   datasets: DatasetMetaLite[];
   setDatasets: React.Dispatch<React.SetStateAction<DatasetMetaLite[]>>;
   activeLayers: string[];
@@ -59,17 +50,31 @@ interface GeoPageBodyProps {
 }
 
 function GeoPageBody({
-  onNewConversation,
+  setThreadId,
   datasets,
   setDatasets,
   activeLayers,
   setActiveLayers,
 }: GeoPageBodyProps) {
-  const { state: agentState } = useCoAgent<AgentState>({
+  const { state: agentState, setState: setAgentState } = useCoAgent<AgentState>({
     name: "geo-agent",
     initialState: { datasets: [], active_layers: [], last_error: null },
   });
+  const { setMessages } = useCopilotMessagesContext();
   const [drawing, setDrawing] = useState(false);
+
+  // Mirror local state into agent state on every change so build_prompt
+  // (server-side) sees the current datasets in its system prompt.
+  useEffect(() => {
+    setAgentState({
+      ...(agentState ?? { datasets: [], active_layers: [], last_error: null }),
+      datasets,
+      active_layers: activeLayers,
+    });
+    // Intentionally only on local changes, not agentState changes (AGUI
+    // would otherwise echo back and cause an infinite loop).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasets, activeLayers]);
 
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
@@ -99,6 +104,14 @@ function GeoPageBody({
     setActiveLayers((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  const onNewConversation = () => {
+    const fresh = resetThreadId();
+    setThreadId(fresh);
+    setDatasets([]);
+    setActiveLayers([]);
+    setMessages([]);
   };
 
   return (
