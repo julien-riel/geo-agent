@@ -44,8 +44,9 @@ test("draw zone creates a dataset card and map layer", async ({ page }) => {
   // page.mouse.click() doesn't set isPrimary=true on PointerEvents, so terra-draw
   // ignores those clicks. We dispatch PointerEvents directly via evaluate instead.
   await page.evaluate(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
-    if (!canvas) throw new Error("MapLibre canvas not found");
+    const canvasOrNull = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
+    if (!canvasOrNull) throw new Error("MapLibre canvas not found");
+    const canvas: HTMLCanvasElement = canvasOrNull;
 
     function pclick(x: number, y: number) {
       const opts: PointerEventInit = {
@@ -107,8 +108,9 @@ test("clicking Nouveau resets chat and dataset panel", async ({ page }) => {
     return c ? getComputedStyle(c).cursor === "crosshair" : false;
   }, { timeout: 5000 });
   await page.evaluate(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
-    if (!canvas) throw new Error("MapLibre canvas not found");
+    const canvasOrNull = document.querySelector<HTMLCanvasElement>("canvas.maplibregl-canvas");
+    if (!canvasOrNull) throw new Error("MapLibre canvas not found");
+    const canvas: HTMLCanvasElement = canvasOrNull;
     const opts = (x: number, y: number): PointerEventInit => ({
       clientX: x, clientY: y, bubbles: true, cancelable: true,
       pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1,
