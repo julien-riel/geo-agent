@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any, Literal
 
+from pydantic import BaseModel
+
 AggregateOp = Literal["count", "sum", "mean", "min", "max"]
 
 
@@ -64,6 +66,37 @@ def aggregate(
     return {"value": None, "groups": out}
 
 
-def filter_by_attribute(geojson: dict, predicate: str) -> dict:
-    """Placeholder — implemented in Task 13."""
-    raise NotImplementedError
+FilterOp = Literal["eq", "neq", "lt", "gt", "lte", "gte", "in"]
+
+
+class AttributePredicate(BaseModel):
+    property: str
+    op: FilterOp
+    value: Any
+
+
+def _matches(value: Any, op: FilterOp, target: Any) -> bool:
+    if op == "eq":
+        return value == target
+    if op == "neq":
+        return value != target
+    if op == "lt":
+        return value is not None and value < target
+    if op == "gt":
+        return value is not None and value > target
+    if op == "lte":
+        return value is not None and value <= target
+    if op == "gte":
+        return value is not None and value >= target
+    if op == "in":
+        return value in (target or [])
+    raise ValueError(f"Unsupported op: {op}")
+
+
+def filter_by_attribute(geojson: dict, predicate: AttributePredicate) -> dict:
+    out_features = []
+    for f in geojson.get("features", []):
+        v = (f.get("properties") or {}).get(predicate.property)
+        if _matches(v, predicate.op, predicate.value):
+            out_features.append(f)
+    return {"type": "FeatureCollection", "features": out_features}

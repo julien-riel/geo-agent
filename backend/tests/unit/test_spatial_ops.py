@@ -2,6 +2,7 @@ import pytest
 
 from geo_agent.services.spatial_ops import (
     AggregateOp,
+    AttributePredicate,
     aggregate,
     filter_by_attribute,
 )
@@ -66,3 +67,29 @@ def test_aggregate_invalid_op_raises() -> None:
 def test_aggregate_sum_requires_attribute() -> None:
     with pytest.raises(ValueError):
         aggregate({"type": "FeatureCollection", "features": []}, op="sum", attribute=None, group_by=None)
+
+
+def test_filter_by_attribute_eq(sample_fc: dict) -> None:
+    pred = AttributePredicate(property="type", op="eq", value="rue")
+    out = filter_by_attribute(sample_fc, pred)
+    assert len(out["features"]) == 2
+    assert all(f["properties"]["type"] == "rue" for f in out["features"])
+
+
+def test_filter_by_attribute_gt(sample_fc: dict) -> None:
+    pred = AttributePredicate(property="longueur", op="gt", value=300)
+    out = filter_by_attribute(sample_fc, pred)
+    assert len(out["features"]) == 2
+    assert all(f["properties"]["longueur"] > 300 for f in out["features"])
+
+
+def test_filter_by_attribute_in(sample_fc: dict) -> None:
+    pred = AttributePredicate(property="type", op="in", value=["rue", "ruelle"])
+    out = filter_by_attribute(sample_fc, pred)
+    assert len(out["features"]) == 2
+
+
+def test_filter_by_attribute_preserves_structure(sample_fc: dict) -> None:
+    pred = AttributePredicate(property="type", op="eq", value="boulevard")
+    out = filter_by_attribute(sample_fc, pred)
+    assert out["type"] == "FeatureCollection"
