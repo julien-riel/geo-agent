@@ -13,6 +13,8 @@ import { MapView } from "@/components/Map/MapView";
 import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
+import { SelectedFeatureProvider } from "@/lib/selectedFeature";
+import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
 const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [] };
 
@@ -227,29 +229,41 @@ function GeoPageBody() {
   };
 
   return (
-    <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
-      <MapView mapRef={mapRef}>
-        {drawing && <DrawTool onPolygon={onPolygon} />}
-        {activeLayers.map((id) => (
-          <DatasetLayer key={id} datasetId={id} />
-        ))}
-      </MapView>
+    <SelectedFeatureProvider>
+      <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
+        <MapView mapRef={mapRef}>
+          {drawing && <DrawTool onPolygon={onPolygon} />}
+          {activeLayers.map((id) => (
+            <DatasetLayer key={id} datasetId={id} />
+          ))}
+        </MapView>
 
-      <DatasetPanel
-        datasets={datasets}
-        activeLayers={activeLayers}
-        onToggle={onToggle}
-        onDraw={onDraw}
-        drawingActive={drawing}
-      />
+        <FeatureDrawer onAskAgent={(prompt) => {
+          // Best-effort: focus the chat textarea and pre-fill it.
+          const ta = document.querySelector<HTMLTextAreaElement>("textarea[data-copilot-input], .copilotKitInput textarea");
+          if (ta) {
+            ta.value = prompt;
+            ta.focus();
+            ta.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }} />
 
-      <CopilotSidebar
-        defaultOpen={true}
-        instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
-        labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
-        Header={() => <ChatHeader onNewConversation={onNewConversation} />}
-        markdownTagRenderers={markdownTagRenderers}
-      />
-    </div>
+        <DatasetPanel
+          datasets={datasets}
+          activeLayers={activeLayers}
+          onToggle={onToggle}
+          onDraw={onDraw}
+          drawingActive={drawing}
+        />
+
+        <CopilotSidebar
+          defaultOpen={true}
+          instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
+          labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
+          Header={() => <ChatHeader onNewConversation={onNewConversation} />}
+          markdownTagRenderers={markdownTagRenderers}
+        />
+      </div>
+    </SelectedFeatureProvider>
   );
 }

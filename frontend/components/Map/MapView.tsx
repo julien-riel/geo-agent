@@ -4,6 +4,8 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { createContext, MutableRefObject, useContext, useEffect, useRef, useState } from "react";
 import { BASEMAP_STYLE_URL } from "@/lib/basemap";
+import { FeaturePopup } from "./FeaturePopup";
+import { HighlightLayer } from "./HighlightLayer";
 
 export const MapContext = createContext<maplibregl.Map | null>(null);
 export const useMap = () => useContext(MapContext);
@@ -38,7 +40,15 @@ export function MapView({ children, mapRef }: MapViewProps) {
   return (
     <div style={{ position: "absolute", inset: 0 }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-      <MapContext.Provider value={map}>{map && children}</MapContext.Provider>
+      <MapContext.Provider value={map}>
+        {map && (
+          <>
+            <HighlightLayer />
+            <FeaturePopup />
+            {children}
+          </>
+        )}
+      </MapContext.Provider>
     </div>
   );
 }
