@@ -1,0 +1,139 @@
+from typing import Annotated, Any, Literal
+
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+
+from geo_agent.agent.registry import get_services
+from geo_agent.models import ToolError
+from geo_agent.services.ogc_filter import (
+    AttributeFilter,
+    SpatialFilter,
+)
+from geo_agent.services.wfs_client import TooManyFeaturesError
+
+
+class PolygonSource(BaseModel):
+    type: Literal["polygon"]
+    polygon: dict
+
+
+class DatasetSource(BaseModel):
+    type: Literal["dataset"]
+    dataset_id: str
+    use_geometry: bool = False  # if False, use bbox; if True, union geometries
+
+
+class AttributeFilterInput(BaseModel):
+    property: str
+    op: Literal["eq", "neq", "lt", "gt", "lte", "gte", "like"]
+    value: Any
+
+
+def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
+    minx, miny, maxx, maxy = bbox
+    return {
+        "type": "Polygon",
+        "coordinates": [[[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy], [minx, miny]]],
+    }
+
+
+@tool
+async def select_features(
+    layer: str,
+    geometry_source: dict,
+    spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"],
+    alias: Annotated[str | None, Field(description="Human-readable name for this dataset")] = None,
+    attribute_filter: dict | None = None,
+    distance_meters: float | None = None,
+) -> dict:
+    """Select features from a WFS layer using an OGC spatial filter pushed to the server.
+
+    geometry_source must be one of:
+      - {"type":"polygon","polygon": <GeoJSON Polygon>}  — typically the user's drawing
+      - {"type":"dataset","dataset_id":"result_NNN","use_geometry": false}  — chain from a previous result.
+        With use_geometry=false, the bbox of the parent dataset is used (fast).
+        With use_geometry=true, geometries are unioned (precise, larger payload).
+
+    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"} on success,
+             or {"error": {"code","message","suggestion"}} on failure.
+    """
+    services = get_services()
+
+    try:
+        gsrc = (PolygonSource if geometry_source.get("type") == "polygon" else DatasetSource).model_validate(geometry_source)
+    except Exception as e:
+        return {"error": ToolError(code="bad_input", message=f"Invalid geometry_source: {e}").model_dump()}
+
+    if isinstance(gsrc, PolygonSource):
+        geom = gsrc.polygon
+        parent_ids: list[str] = []
+        filter_summary = f"{spatial_predicate}(user_polygon)"
+    else:
+        meta = services.store.get_meta(gsrc.dataset_id)
+        parent_ids = [gsrc.dataset_id]
+        if gsrc.use_geometry:
+            return {
+                "error": ToolError(
+                    code="not_implemented",
+                    message="use_geometry=True not implemented yet; use bbox-based chaining (use_geometry=false).",
+                ).model_dump()
+            }
+        geom = _bbox_polygon(meta.bbox)
+        filter_summary = f"{spatial_predicate}(bbox of {gsrc.dataset_id})"
+
+    # Discover geom_property
+    schema = await services.wfs.describe_feature_type(layer)
+    geom_property = schema.geom_property
+
+    # Build filters
+    if spatial_predicate == "dwithin":
+        if distance_meters is None:
+            return {"error": ToolError(code="bad_input", message="dwithin requires distance_meters").model_dump()}
+        sf = SpatialFilter(predicate="dwithin", geometry=geom, geom_property=geom_property, distance_meters=distance_meters)
+    else:
+        sf = SpatialFilter(predicate=spatial_predicate, geometry=geom, geom_property=geom_property)
+
+    af: AttributeFilter | None = None
+    if attribute_filter is not None:
+        try:
+            ai = AttributeFilterInput.model_validate(attribute_filter)
+            af = AttributeFilter(property=ai.property, op=ai.op, value=ai.value)
+        except Exception as e:
+            return {"error": ToolError(code="bad_input", message=f"Invalid attribute_filter: {e}").model_dump()}
+
+    try:
+        gj = await services.wfs.get_features(
+            layer=layer,
+            spatial_filter=sf,
+            attribute_filter=af,
+            max_features=services.settings.MAX_FEATURES_PER_QUERY,
+        )
+    except TooManyFeaturesError as e:
+        return {
+            "error": ToolError(
+                code="too_many_features",
+                message=str(e),
+                suggestion="Refine the area, add an attribute_filter, or chain from a smaller dataset.",
+            ).model_dump()
+        }
+
+    rid = services.store.put(
+        gj,
+        {
+            "alias": alias,
+            "source": {"type": "wfs", "layer": layer, "filter_summary": filter_summary},
+            "lineage": {
+                "parent_ids": parent_ids,
+                "operation": "select_features",
+                "params": {"layer": layer, "spatial_predicate": spatial_predicate},
+            },
+        },
+    )
+    meta = services.store.get_meta(rid)
+    return {
+        "dataset_id": rid,
+        "alias": meta.alias,
+        "feature_count": meta.feature_count,
+        "bbox": list(meta.bbox),
+        "attribute_schema": meta.attribute_schema,
+    }
