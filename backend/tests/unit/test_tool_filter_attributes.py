@@ -32,12 +32,33 @@ def populated(services: Services) -> str:
 
 
 async def test_filter_attributes_creates_new_dataset(services: Services, populated: str) -> None:
-    r = await filter_attributes.ainvoke({
-        "dataset_id": populated,
-        "predicate": {"property": "longueur", "op": "gt", "value": 200},
-        "alias": "longues",
-    })
+    r = await filter_attributes.coroutine(
+        dataset_id=populated,
+        predicate={"property": "longueur", "op": "gt", "value": 200},
+        alias="longues",
+        tool_call_id="t",
+    )
     assert r["feature_count"] == 2
     new_meta = services.store.get_meta(r["dataset_id"])
     assert new_meta.lineage.parent_ids == [populated]
     assert new_meta.alias == "longues"
+
+
+async def test_filter_attributes_unknown_dataset_returns_command_with_error(services: Services) -> None:
+    r = await filter_attributes.coroutine(
+        dataset_id="result_999",
+        predicate={"property": "x", "op": "eq", "value": 1},
+        alias=None,
+        tool_call_id="t",
+    )
+    assert r.update["errors"][0]["code"] == "dataset_not_found"
+
+
+async def test_filter_attributes_bad_predicate_returns_command_with_error(services: Services, populated: str) -> None:
+    r = await filter_attributes.coroutine(
+        dataset_id=populated,
+        predicate={"property": "x"},  # missing op + value
+        alias=None,
+        tool_call_id="t",
+    )
+    assert r.update["errors"][0]["code"] == "bad_input"

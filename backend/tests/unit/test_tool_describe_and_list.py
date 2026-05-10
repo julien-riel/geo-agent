@@ -27,20 +27,23 @@ def _put(services: Services, alias: str | None = None) -> str:
 
 async def test_describe_dataset_by_id(services: Services) -> None:
     rid = _put(services, alias="my_data")
-    r = await describe_dataset.ainvoke({"id_or_alias": rid})
+    r = await describe_dataset.coroutine(id_or_alias=rid, tool_call_id="t")
     assert r["id"] == rid
     assert r["alias"] == "my_data"
 
 
 async def test_describe_dataset_by_alias(services: Services) -> None:
     _put(services, alias="parcs")
-    r = await describe_dataset.ainvoke({"id_or_alias": "parcs"})
+    r = await describe_dataset.coroutine(id_or_alias="parcs", tool_call_id="t")
     assert r["alias"] == "parcs"
 
 
-async def test_describe_dataset_unknown(services: Services) -> None:
-    r = await describe_dataset.ainvoke({"id_or_alias": "nope"})
-    assert r["error"]["code"] == "dataset_not_found"
+async def test_describe_dataset_unknown_returns_command_with_error(services: Services) -> None:
+    _put(services, alias="parcs")
+    r = await describe_dataset.coroutine(id_or_alias="nope", tool_call_id="t")
+    err = r.update["errors"][0]
+    assert err["code"] == "dataset_not_found"
+    assert "parcs" in err["suggestion"]
 
 
 async def test_list_datasets_empty(services: Services) -> None:

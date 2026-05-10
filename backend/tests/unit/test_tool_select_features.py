@@ -32,13 +32,12 @@ def services(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Services:
 
 async def test_select_features_with_polygon(services: Services) -> None:
     polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
-    result = await select_features.ainvoke(
-        {
-            "layer": "montreal:parcs",
-            "geometry_source": {"type": "polygon", "polygon": polygon},
-            "spatial_predicate": "within",
-            "alias": "parcs_test",
-        }
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source={"type": "polygon", "polygon": polygon},
+        spatial_predicate="within",
+        alias="parcs_test",
+        tool_call_id="t",
     )
 
     assert "dataset_id" in result
@@ -49,19 +48,17 @@ async def test_select_features_with_polygon(services: Services) -> None:
 
 
 async def test_select_features_chains_from_dataset_using_bbox(services: Services) -> None:
-    # Pre-populate a dataset with a known bbox
     rid = services.store.put(
         {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [-73.6, 45.5]}, "properties": {}}]},
         {"source": {"type": "wfs", "layer": "montreal:parcs", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select", "params": {}}},
     )
 
-    result = await select_features.ainvoke(
-        {
-            "layer": "montreal:chaussees",
-            "geometry_source": {"type": "dataset", "dataset_id": rid, "use_geometry": False},
-            "spatial_predicate": "intersects",
-            "alias": None,
-        }
+    result = await select_features.coroutine(
+        layer="montreal:chaussees",
+        geometry_source={"type": "dataset", "dataset_id": rid, "use_geometry": False},
+        spatial_predicate="intersects",
+        alias=None,
+        tool_call_id="t",
     )
 
     assert result["feature_count"] == 1
@@ -69,22 +66,35 @@ async def test_select_features_chains_from_dataset_using_bbox(services: Services
     assert new_meta.lineage.parent_ids == [rid]
 
 
-async def test_select_features_too_many_returns_error(services: Services) -> None:
+async def test_select_features_too_many_returns_command_with_error(services: Services) -> None:
     from geo_agent.services.wfs_client import TooManyFeaturesError
 
     services.wfs.get_features.side_effect = TooManyFeaturesError(5000)
 
     polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
-    result = await select_features.ainvoke(
-        {
-            "layer": "montreal:parcs",
-            "geometry_source": {"type": "polygon", "polygon": polygon},
-            "spatial_predicate": "within",
-            "alias": None,
-        }
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source={"type": "polygon", "polygon": polygon},
+        spatial_predicate="within",
+        alias=None,
+        tool_call_id="t",
     )
 
-    assert result["error"]["code"] == "too_many_features"
+    assert result.update["errors"][0]["code"] == "too_many_features"
+
+
+async def test_select_features_unknown_dataset_returns_command_with_suggestion(services: Services) -> None:
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source={"type": "dataset", "dataset_id": "result_999", "use_geometry": False},
+        spatial_predicate="intersects",
+        alias=None,
+        tool_call_id="t",
+    )
+
+    err = result.update["errors"][0]
+    assert err["code"] == "dataset_not_found"
+    assert "Available IDs" in err["suggestion"]
 
 
 async def test_select_features_use_geometry_true_with_drawing(services: Services) -> None:
@@ -100,23 +110,21 @@ async def test_select_features_use_geometry_true_with_drawing(services: Services
         },
     )
 
-    result = await select_features.ainvoke(
-        {
-            "layer": "montreal:parcs",
-            "geometry_source": {"type": "dataset", "dataset_id": drawing_id, "use_geometry": True},
-            "spatial_predicate": "within",
-            "alias": "parcs_in_zone",
-        }
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source={"type": "dataset", "dataset_id": drawing_id, "use_geometry": True},
+        spatial_predicate="within",
+        alias="parcs_in_zone",
+        tool_call_id="t",
     )
 
     assert "dataset_id" in result, result
     sf_arg = services.wfs.get_features.call_args.kwargs["spatial_filter"]
     assert sf_arg.geometry["type"] == "Polygon"
-    # Coordinates: shapely round-trip preserves these exactly for an explicit polygon
     assert sf_arg.geometry["coordinates"][0][0] == [-73.6, 45.5] or tuple(sf_arg.geometry["coordinates"][0][0]) == (-73.6, 45.5)
 
 
-async def test_select_features_use_geometry_true_multipolygon_returns_error(services: Services) -> None:
+async def test_select_features_use_geometry_true_multipolygon_returns_command_with_error(services: Services) -> None:
     parent_id = services.store.put(
         {
             "type": "FeatureCollection",
@@ -128,13 +136,12 @@ async def test_select_features_use_geometry_true_multipolygon_returns_error(serv
         {"source": {"type": "wfs", "layer": "montreal:parcs", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select_features", "params": {}}},
     )
 
-    result = await select_features.ainvoke(
-        {
-            "layer": "montreal:chaussees",
-            "geometry_source": {"type": "dataset", "dataset_id": parent_id, "use_geometry": True},
-            "spatial_predicate": "intersects",
-            "alias": None,
-        }
+    result = await select_features.coroutine(
+        layer="montreal:chaussees",
+        geometry_source={"type": "dataset", "dataset_id": parent_id, "use_geometry": True},
+        spatial_predicate="intersects",
+        alias=None,
+        tool_call_id="t",
     )
 
-    assert result["error"]["code"] == "unsupported_geometry"
+    assert result.update["errors"][0]["code"] == "unsupported_geometry"

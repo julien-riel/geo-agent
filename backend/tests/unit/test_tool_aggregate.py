@@ -32,21 +32,26 @@ def populated_dataset(services: Services) -> str:
 
 
 async def test_aggregate_count(services: Services, populated_dataset: str) -> None:
-    r = await aggregate_tool.ainvoke({"dataset_id": populated_dataset, "op": "count"})
+    r = await aggregate_tool.coroutine(dataset_id=populated_dataset, op="count", tool_call_id="t")
     assert r["value"] == 3
 
 
 async def test_aggregate_sum_with_attribute(services: Services, populated_dataset: str) -> None:
-    r = await aggregate_tool.ainvoke({"dataset_id": populated_dataset, "op": "sum", "attribute": "longueur"})
+    r = await aggregate_tool.coroutine(dataset_id=populated_dataset, op="sum", attribute="longueur", tool_call_id="t")
     assert r["value"] == 1300
 
 
 async def test_aggregate_with_group_by(services: Services, populated_dataset: str) -> None:
-    r = await aggregate_tool.ainvoke({"dataset_id": populated_dataset, "op": "sum", "attribute": "longueur", "group_by": "type"})
+    r = await aggregate_tool.coroutine(
+        dataset_id=populated_dataset, op="sum", attribute="longueur", group_by="type", tool_call_id="t"
+    )
     groups = {g["key"]: g["value"] for g in r["groups"]}
     assert groups == {"rue": 300, "boulevard": 1000}
 
 
-async def test_aggregate_unknown_dataset(services: Services) -> None:
-    r = await aggregate_tool.ainvoke({"dataset_id": "result_999", "op": "count"})
-    assert r["error"]["code"] == "dataset_not_found"
+async def test_aggregate_unknown_dataset_returns_command_with_error(services: Services) -> None:
+    r = await aggregate_tool.coroutine(dataset_id="result_999", op="count", tool_call_id="t")
+    # Error path returns a Command with errors appended to state and a ToolMessage
+    assert r.update["errors"][0]["code"] == "dataset_not_found"
+    assert r.update["errors"][0]["suggestion"] == "Available IDs: (none)"
+    assert r.update["messages"][0].tool_call_id == "t"

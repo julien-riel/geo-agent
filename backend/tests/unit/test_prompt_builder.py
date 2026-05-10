@@ -51,7 +51,7 @@ def test_build_prompt_returns_system_message_then_messages() -> None:
             {"id": "result_001", "alias": "zone_1", "operation": "user_drawing", "feature_count": 1, "bbox": [0, 0, 1, 1]}
         ],
         "active_layers": [],
-        "last_error": None,
+        "errors": [],
         "messages": [HumanMessage(content="Trouve les chaussées dans cette zone")],
     }
 
@@ -71,7 +71,7 @@ def test_build_prompt_handles_missing_datasets() -> None:
 
     from geo_agent.agent.prompt_builder import build_prompt
 
-    state = {"messages": [], "active_layers": [], "last_error": None}  # no datasets key
+    state = {"messages": [], "active_layers": [], "errors": []}  # no datasets key
 
     out = build_prompt(state)
 

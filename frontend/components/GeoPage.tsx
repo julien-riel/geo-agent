@@ -55,7 +55,7 @@ function GeoPageBody({
 }: GeoPageBodyProps) {
   const { state: agentState, setState: setAgentState } = useCoAgent<AgentState>({
     name: "geo-agent",
-    initialState: { datasets: [], active_layers: [], last_error: null },
+    initialState: { datasets: [], active_layers: [], errors: [] },
   });
   const [drawing, setDrawing] = useState(false);
 
@@ -63,7 +63,7 @@ function GeoPageBody({
   // (server-side) sees the current datasets in its system prompt.
   useEffect(() => {
     setAgentState({
-      ...(agentState ?? { datasets: [], active_layers: [], last_error: null }),
+      ...(agentState ?? { datasets: [], active_layers: [], errors: [] }),
       datasets,
       active_layers: activeLayers,
     });
@@ -74,8 +74,16 @@ function GeoPageBody({
 
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
-    render: ({ state }) =>
-      state?.last_error ? <div style={{ color: "red" }}>Erreur : {state.last_error}</div> : null,
+    render: ({ state }) => {
+      const last = state?.errors?.[state.errors.length - 1];
+      if (!last) return null;
+      return (
+        <div style={{ color: "red" }}>
+          <strong>Erreur ({last.code}) :</strong> {last.message}
+          {last.suggestion ? <div style={{ opacity: 0.8 }}>↳ {last.suggestion}</div> : null}
+        </div>
+      );
+    },
   });
 
   const onDraw = () => setDrawing(true);

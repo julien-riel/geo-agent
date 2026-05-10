@@ -1,10 +1,12 @@
 from typing import Annotated, Any, Literal
 
-from langchain_core.tools import tool
+from langchain_core.tools import InjectedToolCallId, tool
+from langgraph.types import Command
 from pydantic import BaseModel, Field
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
 
+from geo_agent.agent.error_helpers import tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.models import ToolError
 from geo_agent.services.ogc_filter import (
@@ -53,10 +55,11 @@ async def select_features(
     layer: str,
     geometry_source: dict,
     spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"],
+    tool_call_id: Annotated[str, InjectedToolCallId],
     alias: Annotated[str | None, Field(description="Human-readable name for this dataset")] = None,
     attribute_filter: dict | None = None,
     distance_meters: float | None = None,
-) -> dict:
+) -> dict | Command:
     """Select features from a WFS layer using an OGC spatial filter pushed to the server.
 
     geometry_source must be one of:
@@ -65,29 +68,43 @@ async def select_features(
         With use_geometry=false, the bbox of the parent dataset is used (fast).
         With use_geometry=true, geometries are unioned (precise, larger payload).
 
-    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"} on success,
-             or {"error": {"code","message","suggestion"}} on failure.
+    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"} on success.
+    On failure, the error appears in agent state and is fed back as a tool message.
     """
     services = get_services()
 
     try:
         gsrc = (PolygonSource if geometry_source.get("type") == "polygon" else DatasetSource).model_validate(geometry_source)
     except Exception as e:
-        return {"error": ToolError(code="bad_input", message=f"Invalid geometry_source: {e}").model_dump()}
+        return tool_error_command(
+            ToolError(code="bad_input", message=f"Invalid geometry_source: {e}"),
+            tool_call_id,
+        )
 
     if isinstance(gsrc, PolygonSource):
         geom = gsrc.polygon
         parent_ids: list[str] = []
         filter_summary = f"{spatial_predicate}(user_polygon)"
     else:
-        meta = services.store.get_meta(gsrc.dataset_id)
+        try:
+            meta = services.store.get_meta(gsrc.dataset_id)
+        except FileNotFoundError:
+            known = [m.id for m in services.store.list()]
+            return tool_error_command(
+                ToolError(
+                    code="dataset_not_found",
+                    message=f"No dataset {gsrc.dataset_id}",
+                    suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
+                ),
+                tool_call_id,
+            )
         parent_ids = [gsrc.dataset_id]
         if gsrc.use_geometry:
             gj = services.store.get_geojson(gsrc.dataset_id)
             geom = _union_dataset_geometries(gj)
             if geom["type"] != "Polygon":
-                return {
-                    "error": ToolError(
+                return tool_error_command(
+                    ToolError(
                         code="unsupported_geometry",
                         message=(
                             f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; "
@@ -97,8 +114,9 @@ async def select_features(
                             "Use use_geometry=false (bbox) or chain from a dataset whose "
                             "features form a single polygon."
                         ),
-                    ).model_dump()
-                }
+                    ),
+                    tool_call_id,
+                )
             filter_summary = f"{spatial_predicate}(geometry of {gsrc.dataset_id})"
         else:
             geom = _bbox_polygon(meta.bbox)
@@ -111,7 +129,10 @@ async def select_features(
     # Build filters
     if spatial_predicate == "dwithin":
         if distance_meters is None:
-            return {"error": ToolError(code="bad_input", message="dwithin requires distance_meters").model_dump()}
+            return tool_error_command(
+                ToolError(code="bad_input", message="dwithin requires distance_meters"),
+                tool_call_id,
+            )
         sf = SpatialFilter(predicate="dwithin", geometry=geom, geom_property=geom_property, distance_meters=distance_meters)
     else:
         sf = SpatialFilter(predicate=spatial_predicate, geometry=geom, geom_property=geom_property)
@@ -122,7 +143,10 @@ async def select_features(
             ai = AttributeFilterInput.model_validate(attribute_filter)
             af = AttributeFilter(property=ai.property, op=ai.op, value=ai.value)
         except Exception as e:
-            return {"error": ToolError(code="bad_input", message=f"Invalid attribute_filter: {e}").model_dump()}
+            return tool_error_command(
+                ToolError(code="bad_input", message=f"Invalid attribute_filter: {e}"),
+                tool_call_id,
+            )
 
     try:
         gj = await services.wfs.get_features(
@@ -132,13 +156,14 @@ async def select_features(
             max_features=services.settings.MAX_FEATURES_PER_QUERY,
         )
     except TooManyFeaturesError as e:
-        return {
-            "error": ToolError(
+        return tool_error_command(
+            ToolError(
                 code="too_many_features",
                 message=str(e),
                 suggestion="Refine the area, add an attribute_filter, or chain from a smaller dataset.",
-            ).model_dump()
-        }
+            ),
+            tool_call_id,
+        )
 
     rid = services.store.put(
         gj,

@@ -1,5 +1,9 @@
-from langchain_core.tools import tool
+from typing import Annotated
 
+from langchain_core.tools import InjectedToolCallId, tool
+from langgraph.types import Command
+
+from geo_agent.agent.error_helpers import tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.models import ToolError
 from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribute
@@ -9,8 +13,9 @@ from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribu
 async def filter_attributes(
     dataset_id: str,
     predicate: dict,
+    tool_call_id: Annotated[str, InjectedToolCallId],
     alias: str | None = None,
-) -> dict:
+) -> dict | Command:
     """Filter a dataset by an attribute predicate, producing a new dataset.
 
     predicate is {"property": str, "op": "eq"|"neq"|"lt"|"gt"|"lte"|"gte"|"in", "value": <any>}.
@@ -20,12 +25,23 @@ async def filter_attributes(
     try:
         gj = services.store.get_geojson(dataset_id)
     except FileNotFoundError:
-        return {"error": ToolError(code="dataset_not_found", message=f"No dataset {dataset_id}").model_dump()}
+        known = [m.id for m in services.store.list()]
+        return tool_error_command(
+            ToolError(
+                code="dataset_not_found",
+                message=f"No dataset {dataset_id}",
+                suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
+            ),
+            tool_call_id,
+        )
 
     try:
         pred = AttributePredicate.model_validate(predicate)
     except Exception as e:
-        return {"error": ToolError(code="bad_input", message=f"Bad predicate: {e}").model_dump()}
+        return tool_error_command(
+            ToolError(code="bad_input", message=f"Bad predicate: {e}"),
+            tool_call_id,
+        )
 
     out = filter_by_attribute(gj, pred)
     new_id = services.store.put(

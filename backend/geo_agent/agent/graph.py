@@ -3,6 +3,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from geo_agent.agent.prompt_builder import build_prompt
+from geo_agent.agent.state import AgentState
 from geo_agent.agent.tools.aggregate import aggregate
 from geo_agent.agent.tools.describe_dataset import describe_dataset
 from geo_agent.agent.tools.filter_attributes import filter_attributes
@@ -34,5 +35,6 @@ def build_agent(settings: Settings):
         model=llm,
         tools=TOOLS,
         prompt=build_prompt,
+        state_schema=AgentState,
         checkpointer=MemorySaver(),
     )

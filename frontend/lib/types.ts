@@ -10,9 +10,16 @@ export const DatasetMetaLite = z.object({
 });
 export type DatasetMetaLite = z.infer<typeof DatasetMetaLite>;
 
+export const ToolError = z.object({
+  code: z.string(),
+  message: z.string(),
+  suggestion: z.string().nullable().optional(),
+});
+export type ToolError = z.infer<typeof ToolError>;
+
 export const AgentState = z.object({
   datasets: z.array(DatasetMetaLite.passthrough()),
   active_layers: z.array(z.string()),
-  last_error: z.string().nullable(),
+  errors: z.array(ToolError),
 });
 export type AgentState = z.infer<typeof AgentState>;
