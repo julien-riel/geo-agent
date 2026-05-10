@@ -1,14 +1,16 @@
 "use client";
 
-import { ThreadsProvider, useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
+import { ThreadsProvider, useCoAgent, useCoAgentStateRender, useCopilotAction } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useEffect, useRef, useState } from "react";
 
+import maplibregl from "maplibre-gl";
 import { ChatHeader } from "@/components/ChatHeader";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { DatasetLayer } from "@/components/Map/DatasetLayer";
 import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
+import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
 
@@ -72,6 +74,7 @@ function GeoPageBody() {
   const [drawing, setDrawing] = useState(false);
   const [hydratedDatasets, setHydratedDatasets] = useState<DatasetMetaLite[] | null>(null);
   const pushed = useRef(false);
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
   const datasets = agentState?.datasets ?? [];
   const activeLayers = agentState?.active_layers ?? [];
@@ -124,6 +127,66 @@ function GeoPageBody() {
     },
   });
 
+  const onShowOnMap = (id: string) => {
+    const current = agentState ?? EMPTY_STATE;
+    if (current.active_layers.includes(id)) return;
+    setAgentState({ ...current, active_layers: [...current.active_layers, id] });
+  };
+
+  const onFitMap = (bbox: [number, number, number, number]) => {
+    const m = mapRef.current;
+    if (!m) return;
+    m.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 80, maxZoom: 16 });
+  };
+
+  useCopilotAction({
+    name: "describe_dataset",
+    render: ({ args, result, status }) => {
+      if (status === "executing" || !result) {
+        return <MetadataWidget data={result as never} datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""} status="executing" />;
+      }
+      return (
+        <MetadataWidget
+          data={result as never}
+          datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""}
+          status="complete"
+          onShowOnMap={onShowOnMap}
+          onFitMap={onFitMap}
+        />
+      );
+    },
+  });
+
+  useCopilotAction({
+    name: "select_features",
+    render: ({ result, status }) => {
+      if (status === "executing" || !result) {
+        return <MetadataWidget data={result as never} datasetId="" status="executing" />;
+      }
+      const r = result as { dataset_id?: string; meta?: unknown };
+      const meta = r.meta ?? r;
+      const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
+      return (
+        <MetadataWidget data={meta as never} datasetId={id} status="complete" onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
+      );
+    },
+  });
+
+  useCopilotAction({
+    name: "filter_attributes",
+    render: ({ result, status }) => {
+      if (status === "executing" || !result) {
+        return <MetadataWidget data={result as never} datasetId="" status="executing" />;
+      }
+      const r = result as { dataset_id?: string; meta?: unknown };
+      const meta = r.meta ?? r;
+      const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
+      return (
+        <MetadataWidget data={meta as never} datasetId={id} status="complete" onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
+      );
+    },
+  });
+
   const onDraw = () => setDrawing(true);
 
   const onPolygon = async (polygon: GeoJSON.Polygon) => {
@@ -165,7 +228,7 @@ function GeoPageBody() {
 
   return (
     <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
-      <MapView>
+      <MapView mapRef={mapRef}>
         {drawing && <DrawTool onPolygon={onPolygon} />}
         {activeLayers.map((id) => (
           <DatasetLayer key={id} datasetId={id} />
