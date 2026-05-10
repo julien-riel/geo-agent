@@ -4,6 +4,7 @@ dist/
 
 # data
 /data/
+/backend/data/
 
 # python
 __pycache__/
@@ -15,11 +16,14 @@ __pycache__/
 # next
 .next/
 .turbo/
+*.tsbuildinfo
 
 # IDE
 .vscode/
 .idea/
+.claude/
 
 # tests
 playwright-report/
 test-results/
+.playwright-mcp/
