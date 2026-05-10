@@ -37,9 +37,11 @@ async def test_filter_attributes_creates_new_dataset(services: Services, populat
         predicate={"property": "longueur", "op": "gt", "value": 200},
         alias="longues",
         tool_call_id="t",
+        state={"datasets": []},
     )
-    assert r["feature_count"] == 2
-    new_meta = services.store.get_meta(r["dataset_id"])
+    new_meta_lite = r.update["datasets"][0]
+    assert new_meta_lite["feature_count"] == 2
+    new_meta = services.store.get_meta(new_meta_lite["id"])
     assert new_meta.lineage.parent_ids == [populated]
     assert new_meta.alias == "longues"
 
@@ -50,6 +52,7 @@ async def test_filter_attributes_unknown_dataset_returns_command_with_error(serv
         predicate={"property": "x", "op": "eq", "value": 1},
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
     assert r.update["errors"][0]["code"] == "dataset_not_found"
 
@@ -60,5 +63,6 @@ async def test_filter_attributes_bad_predicate_returns_command_with_error(servic
         predicate={"property": "x"},  # missing op + value
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
     assert r.update["errors"][0]["code"] == "bad_input"

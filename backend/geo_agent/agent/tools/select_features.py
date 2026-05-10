@@ -1,14 +1,15 @@
 from typing import Annotated, Any, Literal
 
 from langchain_core.tools import InjectedToolCallId, tool
+from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 from pydantic import BaseModel, Field
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
 
-from geo_agent.agent.error_helpers import tool_error_command
+from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
-from geo_agent.models import ToolError
+from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.ogc_filter import (
     AttributeFilter,
     SpatialFilter,
@@ -56,10 +57,11 @@ async def select_features(
     geometry_source: dict,
     spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"],
     tool_call_id: Annotated[str, InjectedToolCallId],
+    state: Annotated[dict, InjectedState],
     alias: Annotated[str | None, Field(description="Human-readable name for this dataset")] = None,
     attribute_filter: dict | None = None,
     distance_meters: float | None = None,
-) -> dict | Command:
+) -> Command:
     """Select features from a WFS layer using an OGC spatial filter pushed to the server.
 
     geometry_source must be one of:
@@ -178,10 +180,23 @@ async def select_features(
         },
     )
     meta = services.store.get_meta(rid)
-    return {
-        "dataset_id": rid,
-        "alias": meta.alias,
-        "feature_count": meta.feature_count,
-        "bbox": list(meta.bbox),
-        "attribute_schema": meta.attribute_schema,
-    }
+    meta_lite = DatasetMetaLite(
+        id=meta.id,
+        alias=meta.alias,
+        feature_count=meta.feature_count,
+        bbox=meta.bbox,
+        layer=meta.source.layer,
+        operation=meta.lineage.operation,
+    )
+    return dataset_created_command(
+        meta_lite,
+        tool_result={
+            "dataset_id": rid,
+            "alias": meta.alias,
+            "feature_count": meta.feature_count,
+            "bbox": list(meta.bbox),
+            "attribute_schema": meta.attribute_schema,
+        },
+        state=state,
+        tool_call_id=tool_call_id,
+    )

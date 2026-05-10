@@ -38,12 +38,14 @@ async def test_select_features_with_polygon(services: Services) -> None:
         spatial_predicate="within",
         alias="parcs_test",
         tool_call_id="t",
+        state={"datasets": []},
     )
 
-    assert "dataset_id" in result
-    assert result["feature_count"] == 1
-    meta = services.store.get_meta(result["dataset_id"])
-    assert meta.alias == "parcs_test"
+    new_meta_lite = result.update["datasets"][0]
+    rid = new_meta_lite["id"]
+    assert new_meta_lite["alias"] == "parcs_test"
+    assert new_meta_lite["feature_count"] == 1
+    meta = services.store.get_meta(rid)
     assert meta.source.layer == "montreal:parcs"
 
 
@@ -59,10 +61,13 @@ async def test_select_features_chains_from_dataset_using_bbox(services: Services
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
 
-    assert result["feature_count"] == 1
-    new_meta = services.store.get_meta(result["dataset_id"])
+    new_meta_lite = result.update["datasets"][0]
+    new_id = new_meta_lite["id"]
+    assert new_meta_lite["feature_count"] == 1
+    new_meta = services.store.get_meta(new_id)
     assert new_meta.lineage.parent_ids == [rid]
 
 
@@ -78,6 +83,7 @@ async def test_select_features_too_many_returns_command_with_error(services: Ser
         spatial_predicate="within",
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
 
     assert result.update["errors"][0]["code"] == "too_many_features"
@@ -90,6 +96,7 @@ async def test_select_features_unknown_dataset_returns_command_with_suggestion(s
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
 
     err = result.update["errors"][0]
@@ -116,9 +123,10 @@ async def test_select_features_use_geometry_true_with_drawing(services: Services
         spatial_predicate="within",
         alias="parcs_in_zone",
         tool_call_id="t",
+        state={"datasets": []},
     )
 
-    assert "dataset_id" in result, result
+    assert result.update["datasets"][0]["alias"] == "parcs_in_zone"
     sf_arg = services.wfs.get_features.call_args.kwargs["spatial_filter"]
     assert sf_arg.geometry["type"] == "Polygon"
     assert sf_arg.geometry["coordinates"][0][0] == [-73.6, 45.5] or tuple(sf_arg.geometry["coordinates"][0][0]) == (-73.6, 45.5)
@@ -142,6 +150,7 @@ async def test_select_features_use_geometry_true_multipolygon_returns_command_wi
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
+        state={"datasets": []},
     )
 
     assert result.update["errors"][0]["code"] == "unsupported_geometry"

@@ -12,13 +12,10 @@ import { MapView } from "@/components/Map/MapView";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
 
+const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [] };
+
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
-  // datasets and active_layers live in this outer component (not inside ThreadsProvider)
-  // so resetting threadId can clear them without remounting MapView (which crashes
-  // headless browsers on rapid remount).
-  const [datasets, setDatasets] = useState<DatasetMetaLite[]>([]);
-  const [activeLayers, setActiveLayers] = useState<string[]>([]);
 
   useEffect(() => {
     setThreadId(getOrCreateThreadId());
@@ -28,49 +25,20 @@ export function GeoPage() {
 
   return (
     <ThreadsProvider threadId={threadId}>
-      <GeoPageBody
-        threadId={threadId}
-        datasets={datasets}
-        setDatasets={setDatasets}
-        activeLayers={activeLayers}
-        setActiveLayers={setActiveLayers}
-      />
+      <GeoPageBody />
     </ThreadsProvider>
   );
 }
 
-interface GeoPageBodyProps {
-  threadId: string;
-  datasets: DatasetMetaLite[];
-  setDatasets: React.Dispatch<React.SetStateAction<DatasetMetaLite[]>>;
-  activeLayers: string[];
-  setActiveLayers: React.Dispatch<React.SetStateAction<string[]>>;
-}
-
-function GeoPageBody({
-  datasets,
-  setDatasets,
-  activeLayers,
-  setActiveLayers,
-}: GeoPageBodyProps) {
+function GeoPageBody() {
   const { state: agentState, setState: setAgentState } = useCoAgent<AgentState>({
     name: "geo-agent",
-    initialState: { datasets: [], active_layers: [], errors: [] },
+    initialState: EMPTY_STATE,
   });
   const [drawing, setDrawing] = useState(false);
 
-  // Mirror local state into agent state on every change so build_prompt
-  // (server-side) sees the current datasets in its system prompt.
-  useEffect(() => {
-    setAgentState({
-      ...(agentState ?? { datasets: [], active_layers: [], errors: [] }),
-      datasets,
-      active_layers: activeLayers,
-    });
-    // Intentionally only on local changes, not agentState changes (AGUI
-    // would otherwise echo back and cause an infinite loop).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [datasets, activeLayers]);
+  const datasets = agentState?.datasets ?? [];
+  const activeLayers = agentState?.active_layers ?? [];
 
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
@@ -100,14 +68,20 @@ function GeoPageBody({
       return;
     }
     const meta = (await r.json()) as DatasetMetaLite;
-    setDatasets((prev) => [...prev, meta]);
-    setActiveLayers((prev) => [...prev, meta.id]);
+    const current = agentState ?? EMPTY_STATE;
+    setAgentState({
+      ...current,
+      datasets: [...current.datasets, meta],
+      active_layers: [...current.active_layers, meta.id],
+    });
   };
 
   const onToggle = (id: string) => {
-    setActiveLayers((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    const current = agentState ?? EMPTY_STATE;
+    const next = current.active_layers.includes(id)
+      ? current.active_layers.filter((x) => x !== id)
+      : [...current.active_layers, id];
+    setAgentState({ ...current, active_layers: next });
   };
 
   const onNewConversation = () => {
