@@ -58,5 +58,26 @@ Voir `.env.example`. Variables clés :
 
 | Variable | Défaut | Rôle |
 |---|---|---|
+| `LLM_PROVIDER` | `ollama` | `ollama` (local) ou `openrouter` (cloud) |
 | `OLLAMA_MODEL` | `gemma4:e4b` | Modèle Ollama. Tester `qwen2.5:7b` ou `llama3.1:8b` si tool calling défaillant |
+| `OPENROUTER_API_KEY` | _(vide)_ | Clé OpenRouter, requise si `LLM_PROVIDER=openrouter` |
+| `OPENROUTER_MODEL` | `anthropic/claude-haiku-4-5` | Modèle OpenRouter — voir recommandations ci-dessous |
 | `MAX_FEATURES_PER_QUERY` | `5000` | Limite par requête WFS — au-delà, l'agent doit raffiner |
+
+### OpenRouter : modèles conseillés pour l'orchestration + tool-calling
+
+| Modèle | Prix indicatif (in/out par M tokens) | Quand l'utiliser |
+|---|---|---|
+| `anthropic/claude-haiku-4-5` | ~$1 / ~$5 | **Recommandé par défaut.** Tool-calling très fiable, latence faible, qualité de raisonnement largement supérieure à Gemma local. Meilleur rapport qualité/prix pour piloter un ReAct avec ~8 outils. |
+| `google/gemini-2.5-flash` | ~$0.30 / ~$2.50 | Option budget. Tool-calling correct, parfois plus bavard. Bon pour itérer pendant le dev. |
+| `deepseek/deepseek-chat-v3` | ~$0.30 / ~$1 | Très bon marché, raisonnement solide, mais parsing de tool-calls parfois moins strict — à valider sur quelques scénarios chaînés. |
+| `anthropic/claude-sonnet-4-6` | ~$3 / ~$15 | À garder pour les requêtes complexes (analyses spatiales chaînées, raisonnement long). Trop cher pour usage par défaut. |
+
+Bascule rapide :
+
+```bash
+# dans .env
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-...
+OPENROUTER_MODEL=anthropic/claude-haiku-4-5
+```
