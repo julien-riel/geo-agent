@@ -30,3 +30,11 @@ test-results/
 
 # brainstorming
 .superpowers/
+
+# secrets / local env (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+frontend/.env.local

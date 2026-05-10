@@ -1,4 +1,6 @@
+from langchain_core.language_models import BaseChatModel
 from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
@@ -25,12 +27,32 @@ TOOLS = [
 ]
 
 
-def build_agent(settings: Settings):
-    llm = ChatOllama(
+def _build_llm(settings: Settings) -> BaseChatModel:
+    if settings.LLM_PROVIDER == "openrouter":
+        if not settings.OPENROUTER_API_KEY:
+            raise ValueError(
+                "LLM_PROVIDER=openrouter but OPENROUTER_API_KEY is empty. "
+                "Set it in .env or switch LLM_PROVIDER to 'ollama'."
+            )
+        return ChatOpenAI(
+            base_url=settings.OPENROUTER_BASE_URL,
+            api_key=settings.OPENROUTER_API_KEY,
+            model=settings.OPENROUTER_MODEL,
+            temperature=0,
+            default_headers={
+                "HTTP-Referer": settings.OPENROUTER_APP_URL,
+                "X-Title": settings.OPENROUTER_APP_NAME,
+            },
+        )
+    return ChatOllama(
         base_url=settings.OLLAMA_BASE_URL,
         model=settings.OLLAMA_MODEL,
         temperature=0,
     )
+
+
+def build_agent(settings: Settings):
+    llm = _build_llm(settings)
     return create_react_agent(
         model=llm,
         tools=TOOLS,

@@ -1,14 +1,22 @@
 from pathlib import Path
+from typing import Literal
 
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    LLM_PROVIDER: Literal["ollama", "openrouter"] = "ollama"
+
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "gemma4:e4b"
+
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "anthropic/claude-haiku-4-5"
+    OPENROUTER_APP_URL: str = "http://localhost:3000"
+    OPENROUTER_APP_NAME: str = "geo-agent"
 
     WFS_BASE_URL: str = (
         "https://api.accept.montreal.ca/api/it-platforms/geomatic/wfs-maps/montreal/ows"

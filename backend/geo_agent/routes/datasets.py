@@ -27,6 +27,21 @@ def get_geojson(dataset_id: str) -> dict:
         raise HTTPException(404, f"dataset {dataset_id} not found")
 
 
+@router.get("/{dataset_id}/attributes/{attribute}/stats")
+def get_attribute_stats(dataset_id: str, attribute: str) -> dict:
+    from geo_agent.services.attribute_stats import compute_attribute_stats
+
+    services = get_services()
+    try:
+        gj = services.store.get_geojson(dataset_id)
+    except FileNotFoundError:
+        raise HTTPException(404, f"dataset {dataset_id} not found")
+    try:
+        return compute_attribute_stats(gj, attribute)
+    except KeyError:
+        raise HTTPException(404, f"attribute {attribute} not found in dataset {dataset_id}")
+
+
 class DrawingPayload(BaseModel):
     polygon: dict
 
