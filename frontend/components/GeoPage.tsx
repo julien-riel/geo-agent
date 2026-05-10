@@ -8,12 +8,12 @@ import { DatasetPanel } from "@/components/DatasetPanel";
 import { DatasetLayer } from "@/components/Map/DatasetLayer";
 import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
-import { AgentState } from "@/lib/types";
+import { AgentState, DatasetMetaLite } from "@/lib/types";
 
 export function GeoPage() {
   const { state, setState } = useCoAgent<AgentState>({
     name: "geo-agent",
-    initialState: { datasets: [], current_drawing: null, active_layers: [], last_error: null },
+    initialState: { datasets: [], active_layers: [], last_error: null },
   });
   const [drawing, setDrawing] = useState(false);
 
@@ -24,14 +24,35 @@ export function GeoPage() {
   });
 
   const onDraw = () => setDrawing(true);
-  const onPolygon = (polygon: GeoJSON.Polygon) => {
-    setState({ ...state, current_drawing: { type: "Feature", geometry: polygon, properties: {} } });
+
+  const onPolygon = async (polygon: GeoJSON.Polygon) => {
     setDrawing(false);
+    const r = await fetch("/api/datasets/drawing", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ polygon }),
+    });
+    if (!r.ok) {
+      console.error("failed to save drawing", await r.text());
+      return;
+    }
+    const meta = (await r.json()) as DatasetMetaLite;
+    const currentDatasets = state?.datasets ?? [];
+    const currentActive = state?.active_layers ?? [];
+    setState({
+      ...(state ?? { datasets: [], active_layers: [], last_error: null }),
+      datasets: [...currentDatasets, meta],
+      active_layers: [...currentActive, meta.id],
+    });
   };
+
   const onToggle = (id: string) => {
     const current = state?.active_layers || [];
     const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
-    setState({ ...(state || { datasets: [], current_drawing: null, active_layers: [], last_error: null }), active_layers: next });
+    setState({
+      ...(state ?? { datasets: [], active_layers: [], last_error: null }),
+      active_layers: next,
+    });
   };
 
   return (
@@ -44,7 +65,7 @@ export function GeoPage() {
       </MapView>
 
       <DatasetPanel
-        datasets={(state?.datasets as any) || []}
+        datasets={(state?.datasets as DatasetMetaLite[]) || []}
         activeLayers={state?.active_layers || []}
         onToggle={onToggle}
         onDraw={onDraw}
