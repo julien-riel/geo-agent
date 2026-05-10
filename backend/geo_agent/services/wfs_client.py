@@ -158,3 +158,65 @@ async def _describe_feature_type(self: "WFSClient", type_name: str) -> FeatureTy
 
 
 WFSClient.describe_feature_type = _describe_feature_type  # type: ignore[attr-defined]
+
+
+import json as _json
+
+from geo_agent.services.ogc_filter import (
+    AttributeFilter,
+    SpatialFilter,
+    build_filter,
+)
+
+
+class TooManyFeaturesError(Exception):
+    def __init__(self, limit: int):
+        super().__init__(
+            f"WFS query returned more than {limit} features. Refine the geometry filter "
+            f"or add an attribute filter to narrow the result."
+        )
+        self.limit = limit
+
+
+def _build_get_feature_xml(
+    layer: str,
+    filter_xml: str,
+    max_features: int,
+    srs_name: str = "EPSG:4326",
+) -> str:
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<wfs:GetFeature xmlns:wfs="http://www.opengis.net/wfs/2.0"
+                xmlns:fes="http://www.opengis.net/fes/2.0"
+                xmlns:gml="http://www.opengis.net/gml/3.2"
+                service="WFS" version="2.0.0"
+                count="{max_features + 1}"
+                outputFormat="application/json">
+  <wfs:Query typeNames="{layer}" srsName="{srs_name}">
+    {filter_xml}
+  </wfs:Query>
+</wfs:GetFeature>"""
+
+
+async def _get_features(
+    self: "WFSClient",
+    layer: str,
+    spatial_filter: SpatialFilter | None,
+    attribute_filter: AttributeFilter | None,
+    max_features: int,
+) -> dict:
+    filter_xml = build_filter(spatial=spatial_filter, attributes=attribute_filter)
+    body = _build_get_feature_xml(layer, filter_xml, max_features)
+    headers = {"Content-Type": "application/xml"}
+
+    async with httpx.AsyncClient(timeout=self._timeout) as client:
+        r = await client.post(self._base_url, content=body.encode("utf-8"), headers=headers)
+        r.raise_for_status()
+        gj = _json.loads(r.content)
+
+    features = gj.get("features", [])
+    if len(features) > max_features:
+        raise TooManyFeaturesError(max_features)
+    return gj
+
+
+WFSClient.get_features = _get_features  # type: ignore[attr-defined]

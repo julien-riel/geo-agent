@@ -51,3 +51,63 @@ async def test_describe_feature_type(tmp_path: Path, capabilities_xml: bytes) ->
     assert schema.geom_property == "geom"
     assert schema.attribute_schema["longueur_m"] == "number"
     assert schema.attribute_schema["nom"] == "string"
+
+
+from geo_agent.services.ogc_filter import SpatialFilter
+
+
+@respx.mock
+async def test_get_features_with_filter(tmp_path: Path) -> None:
+    base = "https://example.test/wfs"
+    sample_geojson = b'{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[-73.6,45.5]},"properties":{"nom":"X"}}]}'
+
+    route = respx.post(base).mock(return_value=httpx.Response(200, content=sample_geojson))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    sf = SpatialFilter(
+        predicate="intersects",
+        geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+        geom_property="geom",
+    )
+
+    result = await client.get_features(
+        layer="montreal:chaussees",
+        spatial_filter=sf,
+        attribute_filter=None,
+        max_features=100,
+    )
+
+    assert result["type"] == "FeatureCollection"
+    assert len(result["features"]) == 1
+
+    # Verify the request body was a WFS GetFeature with our filter
+    sent = route.calls[0].request
+    body = sent.content.decode("utf-8")
+    assert "GetFeature" in body
+    assert "Intersects" in body
+    assert "montreal:chaussees" in body
+
+
+@respx.mock
+async def test_get_features_too_many_raises(tmp_path: Path) -> None:
+    from geo_agent.services.wfs_client import TooManyFeaturesError
+
+    base = "https://example.test/wfs"
+    # Return 6 features when cap is 5 (max+1)
+    feats = [
+        {"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {}}
+        for _ in range(6)
+    ]
+    payload = {"type": "FeatureCollection", "features": feats}
+    import json
+    respx.post(base).mock(return_value=httpx.Response(200, content=json.dumps(payload).encode()))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    sf = SpatialFilter(
+        predicate="intersects",
+        geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+        geom_property="geom",
+    )
+
+    with pytest.raises(TooManyFeaturesError):
+        await client.get_features(layer="x", spatial_filter=sf, attribute_filter=None, max_features=5)
