@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+  xmlns:gml="http://www.opengis.net/gml/3.2"
+  xmlns:montreal="http://montreal"
+  targetNamespace="http://montreal">
+  <xsd:complexType name="chaussessType">
+    <xsd:complexContent>
+      <xsd:extension base="gml:AbstractFeatureType">
+        <xsd:sequence>
+          <xsd:element name="geom" type="gml:GeometryPropertyType"/>
+          <xsd:element name="nom" type="xsd:string"/>
+          <xsd:element name="longueur_m" type="xsd:double"/>
+          <xsd:element name="type_voie" type="xsd:string"/>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+</xsd:schema>

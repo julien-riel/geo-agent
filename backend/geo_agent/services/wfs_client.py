@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -88,3 +89,72 @@ class WFSClient:
         self._mem_layers = layers
         self._mem_fetched_at = datetime.now(timezone.utc)
         return layers
+
+
+XSD_NS = "http://www.w3.org/2001/XMLSchema"
+
+_XSD_TYPE_MAP = {
+    "string": "string",
+    "boolean": "boolean",
+    "double": "number",
+    "float": "number",
+    "decimal": "number",
+    "int": "number",
+    "integer": "number",
+    "long": "number",
+    "short": "number",
+    "date": "string",
+    "dateTime": "string",
+}
+
+
+@dataclass
+class FeatureTypeSchema:
+    type_name: str
+    geom_property: str
+    attribute_schema: dict[str, str]
+
+
+def parse_describe_feature_type(xml_bytes: bytes, type_name: str) -> FeatureTypeSchema:
+    root = etree.fromstring(xml_bytes)
+    elements = root.findall(f".//{{{XSD_NS}}}element")
+
+    geom_property = "geom"
+    attrs: dict[str, str] = {}
+    for el in elements:
+        name = el.get("name")
+        type_attr = el.get("type", "")
+        if not name or not type_attr:
+            continue
+        # Geometry properties have type like gml:GeometryPropertyType, gml:PointPropertyType, etc.
+        if type_attr.startswith("gml:") and "Property" in type_attr:
+            geom_property = name
+            continue
+        # Strip xsd: prefix if present
+        local_type = type_attr.split(":")[-1]
+        mapped = _XSD_TYPE_MAP.get(local_type, "string")
+        attrs[name] = mapped
+
+    return FeatureTypeSchema(type_name=type_name, geom_property=geom_property, attribute_schema=attrs)
+
+
+async def _describe_feature_type(self: "WFSClient", type_name: str) -> FeatureTypeSchema:
+    cache_path = self._cache_dir / f"describe_{type_name.replace(':', '_')}.xml"
+    if cache_path.exists():
+        xml = cache_path.read_bytes()
+    else:
+        params = {
+            "service": "WFS",
+            "version": "2.0.0",
+            "request": "DescribeFeatureType",
+            "typeName": type_name,
+        }
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            r = await client.get(self._base_url, params=params)
+            r.raise_for_status()
+            xml = r.content
+            cache_path.write_bytes(xml)
+    return parse_describe_feature_type(xml, type_name)
+
+
+WFSClient.describe_feature_type = _describe_feature_type  # type: ignore[attr-defined]

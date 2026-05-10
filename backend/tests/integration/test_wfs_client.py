@@ -34,3 +34,20 @@ async def test_get_layers_loads_from_disk_cache(tmp_path: Path, capabilities_xml
     # No respx.mock — if it tried to call HTTP, it would fail
     layers = await client.get_layers()
     assert len(layers) >= 2
+
+
+@respx.mock
+async def test_describe_feature_type(tmp_path: Path, capabilities_xml: bytes) -> None:
+    schema_xml = (Path(__file__).parent.parent / "fixtures" / "describe_feature_type_chaussees.xml").read_bytes()
+    base = "https://example.test/wfs"
+    respx.get(base, params={"service": "WFS", "version": "2.0.0", "request": "DescribeFeatureType", "typeName": "montreal:chaussees"}).mock(
+        return_value=httpx.Response(200, content=schema_xml)
+    )
+    respx.get(base).mock(return_value=httpx.Response(200, content=capabilities_xml))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    schema = await client.describe_feature_type("montreal:chaussees")
+
+    assert schema.geom_property == "geom"
+    assert schema.attribute_schema["longueur_m"] == "number"
+    assert schema.attribute_schema["nom"] == "string"
