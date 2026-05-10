@@ -133,14 +133,17 @@ test("clicking Nouveau resets chat and dataset panel", async ({ page }) => {
   });
 
   // Click the "Nouveau" button via JS to avoid cpk-web-inspector pointer interception.
-  await page.evaluate(() => {
-    const btn = Array.from(document.querySelectorAll("button")).find(
-      (b) => /Nouvelle conversation/i.test(b.getAttribute("aria-label") ?? b.textContent ?? "")
-    ) as HTMLElement | undefined;
-    if (!btn) throw new Error("Nouvelle conversation button not found");
-    btn.click();
-  });
-  await page.waitForTimeout(500);
+  // This triggers window.location.reload(), so we need to wait for navigation.
+  await Promise.all([
+    page.waitForLoadState("domcontentloaded"),
+    page.evaluate(() => {
+      const btn = Array.from(document.querySelectorAll("button")).find(
+        (b) => /Nouvelle conversation/i.test(b.getAttribute("aria-label") ?? b.textContent ?? "")
+      ) as HTMLElement | undefined;
+      if (!btn) throw new Error("Nouvelle conversation button not found");
+      btn.click();
+    }),
+  ]);
 
   // Post-conditions: dataset panel is empty AND no more zone_1 card.
   await expect(page.getByText("Aucun dataset", { exact: false })).toBeVisible({ timeout: 8000 });

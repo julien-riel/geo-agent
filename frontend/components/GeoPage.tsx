@@ -1,6 +1,6 @@
 "use client";
 
-import { ThreadsProvider, useCoAgent, useCoAgentStateRender, useCopilotMessagesContext } from "@copilotkit/react-core";
+import { ThreadsProvider, useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
 import { useEffect, useState } from "react";
 
@@ -30,7 +30,6 @@ export function GeoPage() {
     <ThreadsProvider threadId={threadId}>
       <GeoPageBody
         threadId={threadId}
-        setThreadId={setThreadId}
         datasets={datasets}
         setDatasets={setDatasets}
         activeLayers={activeLayers}
@@ -42,7 +41,6 @@ export function GeoPage() {
 
 interface GeoPageBodyProps {
   threadId: string;
-  setThreadId: (id: string) => void;
   datasets: DatasetMetaLite[];
   setDatasets: React.Dispatch<React.SetStateAction<DatasetMetaLite[]>>;
   activeLayers: string[];
@@ -50,7 +48,6 @@ interface GeoPageBodyProps {
 }
 
 function GeoPageBody({
-  setThreadId,
   datasets,
   setDatasets,
   activeLayers,
@@ -60,7 +57,6 @@ function GeoPageBody({
     name: "geo-agent",
     initialState: { datasets: [], active_layers: [], last_error: null },
   });
-  const { setMessages } = useCopilotMessagesContext();
   const [drawing, setDrawing] = useState(false);
 
   // Mirror local state into agent state on every change so build_prompt
@@ -107,11 +103,12 @@ function GeoPageBody({
   };
 
   const onNewConversation = () => {
-    const fresh = resetThreadId();
-    setThreadId(fresh);
-    setDatasets([]);
-    setActiveLayers([]);
-    setMessages([]);
+    resetThreadId();
+    // CopilotSidebar reads messages from a runtime context we can't reliably
+    // clear without remounting the whole CopilotKit provider tree. A page
+    // reload is the simplest reliable reset; the new threadId persists in
+    // sessionStorage, so we resume on a fresh thread on next mount.
+    window.location.reload();
   };
 
   return (
