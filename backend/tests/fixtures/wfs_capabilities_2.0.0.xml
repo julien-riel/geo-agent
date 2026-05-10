@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<WFS_Capabilities version="2.0.0"
+  xmlns="http://www.opengis.net/wfs/2.0"
+  xmlns:ows="http://www.opengis.net/ows/1.1"
+  xmlns:montreal="http://montreal">
+  <FeatureTypeList>
+    <FeatureType>
+      <Name>montreal:chaussees</Name>
+      <Title>Chaussées de Montréal</Title>
+      <Abstract>Réseau routier</Abstract>
+      <DefaultCRS>urn:ogc:def:crs:EPSG::4326</DefaultCRS>
+      <ows:WGS84BoundingBox>
+        <ows:LowerCorner>-73.97 45.40</ows:LowerCorner>
+        <ows:UpperCorner>-73.47 45.71</ows:UpperCorner>
+      </ows:WGS84BoundingBox>
+    </FeatureType>
+    <FeatureType>
+      <Name>montreal:parcs</Name>
+      <Title>Parcs</Title>
+      <DefaultCRS>urn:ogc:def:crs:EPSG::4326</DefaultCRS>
+      <ows:WGS84BoundingBox>
+        <ows:LowerCorner>-73.97 45.40</ows:LowerCorner>
+        <ows:UpperCorner>-73.47 45.71</ows:UpperCorner>
+      </ows:WGS84BoundingBox>
+    </FeatureType>
+  </FeatureTypeList>
+</WFS_Capabilities>
