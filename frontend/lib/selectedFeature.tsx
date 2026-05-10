@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, ReactNode, useContext, useMemo, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useMemo, useState } from "react";
 
 export interface SelectedFeature {
   datasetId: string;
@@ -28,6 +28,14 @@ export function SelectedFeatureProvider({ children }: { children: ReactNode }) {
   };
 
   const value = useMemo(() => ({ selected, setSelected, drawerOpen, setDrawerOpen }), [selected, drawerOpen]);
+
+  // Expose setSelected on window for e2e testing (non-production only).
+  useEffect(() => {
+    if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+      (window as unknown as { __testSetSelected: typeof setSelected }).__testSetSelected = setSelected;
+    }
+  }, [setSelected]);
+
   return <SelectedFeatureContext.Provider value={value}>{children}</SelectedFeatureContext.Provider>;
 }
 

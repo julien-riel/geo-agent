@@ -30,6 +30,9 @@ export function MapView({ children, mapRef }: MapViewProps) {
     m.on("load", () => {
       setMap(m);
       if (mapRef) mapRef.current = m;
+      if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") {
+        (window as unknown as { __map: maplibregl.Map }).__map = m;
+      }
     });
     return () => {
       if (mapRef) mapRef.current = null;

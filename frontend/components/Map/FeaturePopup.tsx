@@ -1,7 +1,7 @@
 "use client";
 
 import maplibregl from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSelectedFeature } from "@/lib/selectedFeature";
 import { useMap } from "./MapView";
@@ -37,17 +37,18 @@ export function FeaturePopup() {
   const map = useMap();
   const { selected, setSelected, setDrawerOpen } = useSelectedFeature();
   const popupRef = useRef<maplibregl.Popup | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  // Use state (not ref) so React re-renders when the container div is ready for the portal.
+  const [container, setContainer] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!map || !selected) return;
 
-    const container = document.createElement("div");
-    containerRef.current = container;
+    const div = document.createElement("div");
+    setContainer(div);
 
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: false, anchor: "bottom" })
       .setLngLat(selected.lngLat)
-      .setDOMContent(container)
+      .setDOMContent(div)
       .addTo(map);
 
     popupRef.current = popup;
@@ -59,11 +60,11 @@ export function FeaturePopup() {
     return () => {
       popup.remove();
       popupRef.current = null;
-      containerRef.current = null;
+      setContainer(null);
     };
   }, [map, selected?.datasetId, selected?.index]);
 
-  if (!selected || !containerRef.current) return null;
+  if (!selected || !container) return null;
 
   const props = (selected.feature.properties ?? {}) as Record<string, unknown>;
   const title = pickTitle(props);
@@ -84,6 +85,6 @@ export function FeaturePopup() {
         Détails →
       </button>
     </div>,
-    containerRef.current
+    container
   );
 }

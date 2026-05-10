@@ -143,6 +143,8 @@ function GeoPageBody() {
 
   useCopilotAction({
     name: "describe_dataset",
+    // available: "disabled" → render-only (no handler); required by CopilotKit 1.57+
+    available: "disabled",
     render: ({ args, result, status }) => {
       if (status === "executing" || !result) {
         return <MetadataWidget data={result as never} datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""} status="executing" />;
@@ -161,6 +163,7 @@ function GeoPageBody() {
 
   useCopilotAction({
     name: "select_features",
+    available: "disabled",
     render: ({ result, status }) => {
       if (status === "executing" || !result) {
         return <MetadataWidget data={result as never} datasetId="" status="executing" />;
@@ -176,6 +179,7 @@ function GeoPageBody() {
 
   useCopilotAction({
     name: "filter_attributes",
+    available: "disabled",
     render: ({ result, status }) => {
       if (status === "executing" || !result) {
         return <MetadataWidget data={result as never} datasetId="" status="executing" />;
