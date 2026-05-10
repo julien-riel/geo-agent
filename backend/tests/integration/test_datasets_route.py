@@ -57,3 +57,37 @@ def test_list_datasets(client: TestClient, tmp_path: Path) -> None:
 def test_get_dataset_not_found(client: TestClient) -> None:
     r = client.get("/datasets/result_999/geojson")
     assert r.status_code == 404
+
+
+def test_post_drawing_creates_dataset(client) -> None:
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [[[-73.6, 45.5], [-73.55, 45.5], [-73.55, 45.55], [-73.6, 45.55], [-73.6, 45.5]]],
+    }
+
+    r = client.post("/datasets/drawing", json={"polygon": polygon})
+
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["id"].startswith("result_")
+    assert body["feature_count"] == 1
+    assert body["operation"] == "user_drawing"
+    assert body["alias"] == "zone_1"
+    minx, miny, maxx, maxy = body["bbox"]
+    assert (minx, miny) == (-73.6, 45.5)
+    assert (maxx, maxy) == (-73.55, 45.55)
+
+
+def test_post_drawing_increments_zone_alias(client) -> None:
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+
+    a = client.post("/datasets/drawing", json={"polygon": polygon}).json()
+    b = client.post("/datasets/drawing", json={"polygon": polygon}).json()
+
+    assert a["alias"] == "zone_1"
+    assert b["alias"] == "zone_2"
+
+
+def test_post_drawing_rejects_non_polygon(client) -> None:
+    r = client.post("/datasets/drawing", json={"polygon": {"type": "Point", "coordinates": [0, 0]}})
+    assert r.status_code == 400
