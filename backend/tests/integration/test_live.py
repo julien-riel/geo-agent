@@ -14,7 +14,7 @@ async def test_agent_lists_layers_against_real_wfs(tmp_path) -> None:
     response = await agent.ainvoke(
         {
             "messages": [{"role": "user", "content": "Quelles couches WFS sont disponibles ? Donne-moi les 3 premières."}],
-            "datasets": [], "current_drawing": None, "active_layers": [], "last_error": None,
+            "datasets": [], "active_layers": [], "last_error": None,
         },
         config={"configurable": {"thread_id": "test"}},
     )
