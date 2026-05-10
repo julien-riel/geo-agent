@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 class SourceInfo(BaseModel):
-    type: Literal["wfs", "derived"]
+    type: Literal["wfs", "derived", "user_drawing"]
     layer: str | None = None
     filter_summary: str = ""
     request_url: str | None = None

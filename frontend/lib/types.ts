@@ -12,7 +12,6 @@ export type DatasetMetaLite = z.infer<typeof DatasetMetaLite>;
 
 export const AgentState = z.object({
   datasets: z.array(DatasetMetaLite.passthrough()),
-  current_drawing: z.any().nullable(),
   active_layers: z.array(z.string()),
   last_error: z.string().nullable(),
 });

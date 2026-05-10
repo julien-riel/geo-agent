@@ -64,3 +64,10 @@ def test_bbox_validation_rejects_invalid_tuple() -> None:
             created_at=datetime.now(timezone.utc),
             size_bytes=0,
         )
+
+
+def test_source_info_accepts_user_drawing_type() -> None:
+    from geo_agent.models import SourceInfo
+
+    s = SourceInfo(type="user_drawing", filter_summary="user-drawn polygon")
+    assert s.type == "user_drawing"

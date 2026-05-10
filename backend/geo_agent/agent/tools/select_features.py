@@ -2,6 +2,8 @@ from typing import Annotated, Any, Literal
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 
 from geo_agent.agent.registry import get_services
 from geo_agent.models import ToolError
@@ -35,6 +37,15 @@ def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
         "type": "Polygon",
         "coordinates": [[[minx, miny], [maxx, miny], [maxx, maxy], [minx, maxy], [minx, miny]]],
     }
+
+
+def _union_dataset_geometries(geojson: dict) -> dict:
+    """Union all feature geometries in a FeatureCollection into a single GeoJSON geometry."""
+    geoms = [shape(f["geometry"]) for f in geojson.get("features", []) if f.get("geometry")]
+    if not geoms:
+        raise ValueError("dataset has no geometries")
+    merged = unary_union(geoms)
+    return mapping(merged)
 
 
 @tool
@@ -72,14 +83,26 @@ async def select_features(
         meta = services.store.get_meta(gsrc.dataset_id)
         parent_ids = [gsrc.dataset_id]
         if gsrc.use_geometry:
-            return {
-                "error": ToolError(
-                    code="not_implemented",
-                    message="use_geometry=True not implemented yet; use bbox-based chaining (use_geometry=false).",
-                ).model_dump()
-            }
-        geom = _bbox_polygon(meta.bbox)
-        filter_summary = f"{spatial_predicate}(bbox of {gsrc.dataset_id})"
+            gj = services.store.get_geojson(gsrc.dataset_id)
+            geom = _union_dataset_geometries(gj)
+            if geom["type"] != "Polygon":
+                return {
+                    "error": ToolError(
+                        code="unsupported_geometry",
+                        message=(
+                            f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; "
+                            "only Polygon is supported as a spatial filter today."
+                        ),
+                        suggestion=(
+                            "Use use_geometry=false (bbox) or chain from a dataset whose "
+                            "features form a single polygon."
+                        ),
+                    ).model_dump()
+                }
+            filter_summary = f"{spatial_predicate}(geometry of {gsrc.dataset_id})"
+        else:
+            geom = _bbox_polygon(meta.bbox)
+            filter_summary = f"{spatial_predicate}(bbox of {gsrc.dataset_id})"
 
     # Discover geom_property
     schema = await services.wfs.describe_feature_type(layer)

@@ -35,6 +35,7 @@ export function DatasetPanel({ datasets, activeLayers, onToggle, onDraw, drawing
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {datasets.map((d) => {
           const visible = activeLayers.includes(d.id);
+          const isZone = d.operation === "user_drawing";
           return (
             <li key={d.id} style={{ padding: "4px 0", borderBottom: "1px dotted #eee" }}>
               <label style={{ cursor: "pointer" }}>
@@ -44,9 +45,10 @@ export function DatasetPanel({ datasets, activeLayers, onToggle, onDraw, drawing
                   onChange={() => onToggle(d.id)}
                   style={{ marginRight: 8 }}
                 />
+                {isZone && <span style={{ marginRight: 6 }} aria-label="zone dessinée">📐</span>}
                 <strong>{d.alias ?? d.id}</strong>
                 <span style={{ color: "#666", marginLeft: 8 }}>
-                  {d.feature_count} features · {d.layer ?? "derived"} · {d.operation}
+                  {d.feature_count} features · {d.layer ?? (isZone ? "user-drawn" : "derived")} · {d.operation}
                 </span>
               </label>
             </li>

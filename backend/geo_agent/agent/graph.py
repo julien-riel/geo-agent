@@ -2,7 +2,7 @@ from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
-from geo_agent.agent.prompts import SYSTEM_PROMPT
+from geo_agent.agent.prompt_builder import build_prompt
 from geo_agent.agent.tools.aggregate import aggregate
 from geo_agent.agent.tools.describe_dataset import describe_dataset
 from geo_agent.agent.tools.filter_attributes import filter_attributes
@@ -33,6 +33,6 @@ def build_agent(settings: Settings):
     return create_react_agent(
         model=llm,
         tools=TOOLS,
-        prompt=SYSTEM_PROMPT,
+        prompt=build_prompt,
         checkpointer=MemorySaver(),
     )

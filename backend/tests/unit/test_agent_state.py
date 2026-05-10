@@ -4,10 +4,10 @@ from geo_agent.agent.state import AgentState, build_initial_state
 from geo_agent.models import DatasetMetaLite
 
 
-def test_initial_state_is_empty() -> None:
+def test_initial_state_has_no_current_drawing() -> None:
     s = build_initial_state()
+    assert "current_drawing" not in s
     assert s["datasets"] == []
-    assert s["current_drawing"] is None
     assert s["active_layers"] == []
     assert s["last_error"] is None
 
