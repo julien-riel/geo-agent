@@ -131,10 +131,12 @@ class FileSystemResultStore:
         ]
 
     def delete(self, id: str) -> None:
-        (self._results_dir / f"{id}.geojson").unlink(missing_ok=True)
-        (self._results_dir / f"{id}.json").unlink(missing_ok=True)
+        rid = self._resolve_id(id)
+        (self._results_dir / f"{rid}.geojson").unlink(missing_ok=True)
+        (self._results_dir / f"{rid}.json").unlink(missing_ok=True)
 
     def update_alias(self, id: str, alias: str) -> None:
-        meta = self.get_meta(id)
+        rid = self._resolve_id(id)
+        meta = self.get_meta(rid)
         meta = meta.model_copy(update={"alias": alias})
-        (self._results_dir / f"{id}.json").write_text(meta.model_dump_json())
+        (self._results_dir / f"{rid}.json").write_text(meta.model_dump_json())

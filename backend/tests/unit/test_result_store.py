@@ -112,3 +112,36 @@ def test_get_meta_unknown_raises_filenotfounderror(data_dir: Path) -> None:
     store = FileSystemResultStore(data_dir=data_dir)
     with pytest.raises(FileNotFoundError):
         store.get_meta("nonexistent_id_or_alias")
+
+
+def test_delete_resolves_alias_to_id(data_dir: Path) -> None:
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    store = FileSystemResultStore(data_dir=data_dir)
+    rid = store.put(
+        {"type": "FeatureCollection", "features": []},
+        {"alias": "zone_to_delete", "source": {"type": "user_drawing", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "user_drawing", "params": {}}},
+    )
+
+    store.delete("zone_to_delete")
+
+    with pytest.raises(FileNotFoundError):
+        store.get_meta(rid)
+
+
+def test_update_alias_resolves_alias_to_id(data_dir: Path) -> None:
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    store = FileSystemResultStore(data_dir=data_dir)
+    rid = store.put(
+        {"type": "FeatureCollection", "features": []},
+        {"alias": "old_alias", "source": {"type": "user_drawing", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "user_drawing", "params": {}}},
+    )
+
+    store.update_alias("old_alias", "new_alias")
+
+    meta = store.get_meta(rid)
+    assert meta.alias == "new_alias"
+    # No sidecar file should have been created at <alias>.json
+    assert not (data_dir / "results" / "old_alias.json").exists()
+    assert not (data_dir / "results" / "new_alias.json").exists()
