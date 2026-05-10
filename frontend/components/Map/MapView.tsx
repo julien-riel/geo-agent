@@ -5,7 +5,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { BASEMAP_STYLE_URL } from "@/lib/basemap";
 
-const MapContext = createContext<maplibregl.Map | null>(null);
+export const MapContext = createContext<maplibregl.Map | null>(null);
 export const useMap = () => useContext(MapContext);
 
 export function MapView({ children }: { children?: React.ReactNode }) {
