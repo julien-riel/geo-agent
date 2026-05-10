@@ -89,8 +89,14 @@ async def select_features(
                 return {
                     "error": ToolError(
                         code="unsupported_geometry",
-                        message=f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; only Polygon is supported as a spatial filter today.",
-                        suggestion="Use use_geometry=false (bbox) or chain from a dataset whose features form a single polygon.",
+                        message=(
+                            f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; "
+                            "only Polygon is supported as a spatial filter today."
+                        ),
+                        suggestion=(
+                            "Use use_geometry=false (bbox) or chain from a dataset whose "
+                            "features form a single polygon."
+                        ),
                     ).model_dump()
                 }
             filter_summary = f"{spatial_predicate}(geometry of {gsrc.dataset_id})"
