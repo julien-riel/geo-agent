@@ -87,6 +87,8 @@ flowchart LR
 
 **Key idea:** the frontend never talks to Ollama or the WFS server directly. Everything goes through FastAPI, which owns the agent loop and the dataset store. CopilotKit handles the streaming protocol on top of HTTP between the browser and `/agents/geo-agent`.
 
+**Why two hops for agent traffic?** The Next.js `/api/copilotkit` route is not a redundant proxy — it is the **CopilotKit Runtime adapter**, which translates CopilotKit's chat protocol into AG-UI requests that ag_ui_langgraph on FastAPI understands. The FastAPI endpoint itself does speak AG-UI directly (a `curl` to `/agents/geo-agent` returns a valid AG-UI SSE stream), but `@copilotkit/react-core` 1.5 always routes agent traffic through `runtimeUrl`; the `selfManagedAgents` prop was investigated and does not bypass the runtime in practice. Removing the hop would mean abandoning CopilotKit React (chat UI, hooks, threads) and rebuilding on `@ag-ui/client` directly.
+
 ### 1.3 What lives where
 
 | Path | Purpose |
