@@ -5,12 +5,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from geo_agent.agent.registry import init_services
 from geo_agent.config import get_settings
+from geo_agent.routes.copilotkit import mount_copilotkit
 from geo_agent.routes.datasets import router as datasets_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_services(get_settings())
+    settings = get_settings()
+    init_services(settings)
+    mount_copilotkit(app, settings)
     yield
 
 
