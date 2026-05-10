@@ -1,16 +1,35 @@
 "use client";
 
-import { useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
+import { ThreadsProvider, useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { ChatHeader } from "@/components/ChatHeader";
 import { DatasetPanel } from "@/components/DatasetPanel";
 import { DatasetLayer } from "@/components/Map/DatasetLayer";
 import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
+import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
 
 export function GeoPage() {
+  const [threadId, setThreadId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setThreadId(getOrCreateThreadId());
+  }, []);
+
+  const onNewConversation = () => {
+    const fresh = resetThreadId();
+    setThreadId(fresh);
+  };
+
+  if (!threadId) return null;
+
+  return <GeoPageBody key={threadId} threadId={threadId} onNewConversation={onNewConversation} />;
+}
+
+function GeoPageBody({ threadId, onNewConversation }: { threadId: string; onNewConversation: () => void }) {
   const { state, setState } = useCoAgent<AgentState>({
     name: "geo-agent",
     initialState: { datasets: [], active_layers: [], last_error: null },
@@ -56,27 +75,30 @@ export function GeoPage() {
   };
 
   return (
-    <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
-      <MapView>
-        {drawing && <DrawTool onPolygon={onPolygon} />}
-        {state?.active_layers?.map((id) => (
-          <DatasetLayer key={id} datasetId={id} />
-        ))}
-      </MapView>
+    <ThreadsProvider threadId={threadId}>
+      <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
+        <MapView>
+          {drawing && <DrawTool onPolygon={onPolygon} />}
+          {state?.active_layers?.map((id) => (
+            <DatasetLayer key={id} datasetId={id} />
+          ))}
+        </MapView>
 
-      <DatasetPanel
-        datasets={(state?.datasets as DatasetMetaLite[]) || []}
-        activeLayers={state?.active_layers || []}
-        onToggle={onToggle}
-        onDraw={onDraw}
-        drawingActive={drawing}
-      />
+        <DatasetPanel
+          datasets={(state?.datasets as DatasetMetaLite[]) || []}
+          activeLayers={state?.active_layers || []}
+          onToggle={onToggle}
+          onDraw={onDraw}
+          drawingActive={drawing}
+        />
 
-      <CopilotSidebar
-        defaultOpen={true}
-        instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
-        labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
-      />
-    </div>
+        <CopilotSidebar
+          defaultOpen={true}
+          instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
+          labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
+          Header={() => <ChatHeader onNewConversation={onNewConversation} />}
+        />
+      </div>
+    </ThreadsProvider>
   );
 }
