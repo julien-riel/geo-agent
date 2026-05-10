@@ -21,7 +21,7 @@ The document is organized in three layers, each with one or more Mermaid diagram
 | Agent UI | CopilotKit (`@copilotkit/react-core`, `@copilotkit/react-ui`) | Chat sidebar + agent state hooks + SSE client |
 | Backend | FastAPI 0.115+ | REST endpoints + agent SSE endpoint |
 | Agent runtime | LangGraph + `ag_ui_langgraph` | REACT loop, tool dispatch, state management |
-| LLM | Ollama (Gemma 4, local) | Tool calling and reasoning |
+| LLM | Ollama, local (Qwen2.5 7B by default; configurable) | Tool calling and reasoning |
 | Geometry | Shapely + GeoPandas | Local geometry ops |
 | Data sources | Montreal WFS server + local filesystem | Remote features + cached results |
 
@@ -46,9 +46,9 @@ flowchart LR
     end
 
     subgraph Agent["LangGraph agent"]
-        Graph["graph.py<br/>create_react_agent"]
+        Graph["graph.py<br/>create_react_agent<br/>(state_schema=AgentState)"]
         Tools["agent/tools/*"]
-        State["AgentState<br/>(datasets, active_layers, last_error)"]
+        State["AgentState<br/>(datasets, active_layers, errors)"]
     end
 
     subgraph Services["Services"]
@@ -58,7 +58,7 @@ flowchart LR
         Ops["spatial_ops.py"]
     end
 
-    LLM[("Ollama<br/>Gemma 4")]
+    LLM[("Ollama<br/>tool-calling LLM")]
     WFSSrv[("Montreal WFS")]
     FS[("data/results/<br/>*.geojson + *.json")]
 
@@ -95,7 +95,8 @@ flowchart LR
 |---|---|
 | `backend/geo_agent/main.py` | FastAPI app, CORS, lifespan, router mounting |
 | `backend/geo_agent/agent/graph.py` | LangGraph REACT agent, tool list, ChatOllama config |
-| `backend/geo_agent/agent/state.py` | `AgentState` TypedDict (datasets, active_layers, last_error) |
+| `backend/geo_agent/agent/state.py` | `AgentState` TypedDict (`datasets`, `active_layers`, `errors`) with reducers |
+| `backend/geo_agent/agent/error_helpers.py` | `tool_error_command` / `dataset_created_command` — Command builders tools use to update state |
 | `backend/geo_agent/agent/tools/` | Individual tool implementations (one file each) |
 | `backend/geo_agent/agent/registry.py` | Service-locator singleton (`get_services()`) |
 | `backend/geo_agent/services/result_store.py` | `FileSystemResultStore`: persists GeoJSON + metadata |
@@ -124,7 +125,7 @@ The agent is a standard LangGraph **REACT** (Reason → Act) loop wired together
 ```mermaid
 flowchart TD
     Start([User message arrives]) --> Build["build_prompt(state)<br/>system + dataset summary"]
-    Build --> LLM{"ChatOllama<br/>(Gemma 4)"}
+    Build --> LLM{"ChatOllama<br/>(tool-calling LLM)"}
     LLM -->|tool_calls present| Dispatch["Tool dispatcher"]
     LLM -->|no tool_calls| Final([Stream final<br/>AIMessage])
     Dispatch --> ToolExec["Execute tool<br/>via get_services()"]
@@ -163,14 +164,19 @@ flowchart LR
 |---|---|---|---|
 | `list_wfs_layers` | WFS GetCapabilities | — | none |
 | `list_datasets` | result store | — | none |
-| `describe_dataset` | result store metadata | — | none |
-| `select_features` | WFS + parent dataset geometry | result store (new dataset) | `datasets +=` |
-| `filter_attributes` | parent dataset GeoJSON | result store (new dataset) | `datasets +=` |
-| `aggregate` | parent dataset GeoJSON | — (returns scalar / groups) | none |
-| `show_on_map` | — | — | `active_layers +=` |
-| `hide_on_map` | — | — | `active_layers -=` |
+| `describe_dataset` | result store metadata | — | `errors +=` on miss |
+| `select_features` | WFS + parent dataset geometry | result store (new dataset) | `datasets +=` (or `errors +=`) |
+| `filter_attributes` | parent dataset GeoJSON | result store (new dataset) | `datasets +=` (or `errors +=`) |
+| `aggregate` | parent dataset GeoJSON | — (returns scalar / groups) | `errors +=` on miss |
+| `show_on_map` | result store (validates id) | — | `active_layers` overwritten with the merged list (or `errors +=` if id unknown) |
+| `hide_on_map` | — | — | `active_layers` overwritten with the filtered list |
 
-The `show_on_map` / `hide_on_map` tools return a LangGraph `Command` rather than a plain JSON value — this is how a tool mutates `AgentState` directly so the frontend sees the new `active_layers` without an extra round-trip.
+State mutation goes through two helpers in `agent/error_helpers.py`:
+
+- `tool_error_command(error, tool_call_id)` returns a `Command` that appends a `ToolError` to `state.errors` (capped at 10) **and** sends the JSON-encoded error back to the LLM as a `ToolMessage` so it can recover on the next turn.
+- `dataset_created_command(meta, tool_result, state, tool_call_id)` appends the new `DatasetMetaLite` to `state.datasets` so the frontend sees it via SSE state-delta — no separate round-trip needed.
+
+`show_on_map` / `hide_on_map` use LangChain's `InjectedState` to read the current `active_layers` and write back the full merged list (no implicit reducer — what they emit is what gets stored). This works **because** `state_schema=AgentState` is wired into `create_react_agent`; without it (an earlier bug), all tool-driven state writes were silently dropped.
 
 ### 2.3 Where service dependencies come from
 
@@ -185,7 +191,7 @@ flowchart LR
     Tool3["list_datasets"] -->|get_services| Singleton
 ```
 
-This keeps the tools pure functions of `(args, services) → result` and makes them trivially testable.
+This keeps the tools nearly pure: they read `services` from the singleton, optionally read the live state via `InjectedState`, and either return a plain `dict` (success-only success) or a `Command` (success with state mutation, or error). The unit tests in `tests/unit/test_tool_*.py` call `<tool>.coroutine(...)` directly and pass `state={...}` and `tool_call_id="t"` explicitly.
 
 ### 2.4 End-to-end: chat message → tool calls → SSE stream
 
@@ -200,7 +206,7 @@ sequenceDiagram
     participant API as "/api/copilotkit (Next.js)"
     participant BE as "/agents/geo-agent (FastAPI)"
     participant G as LangGraph REACT
-    participant L as "Ollama (Gemma 4)"
+    participant L as "Ollama LLM"
     participant T as select_features
     participant W as WFS server
     participant S as result_store
@@ -250,34 +256,33 @@ A few details worth highlighting:
 
 ## 3. Frontend rendering flow
 
-### 3.1 Two channels, one shared state
+### 3.1 One source of truth: `agentState`
 
 The frontend has two distinct channels into the backend:
 
 1. **Agent channel** (CopilotKit + SSE) — chat messages, tool events, and the live `AgentState`.
 2. **Dataset channel** (REST) — fetches the actual GeoJSON when the map needs to render a layer, and creates user drawings.
 
-They meet inside `GeoPage.tsx`, which owns local React state for `datasets` and `activeLayers`. That state is mirrored to and from the agent state via `useCoAgent`.
+`GeoPage.tsx` does **not** keep a parallel local copy of `datasets` / `activeLayers`. Both are read directly from `useCoAgent<AgentState>().state`. UI-driven changes (the user toggles a checkbox; finishes drawing a polygon) flow through `setState`. Tool-driven changes (the agent calls `select_features` or `show_on_map`) flow back as SSE state-deltas. Same store, two writers.
 
 ```mermaid
 flowchart LR
     subgraph FE["GeoPage.tsx"]
-        Local["local state<br/>{datasets, activeLayers}"]
-        Agent["useCoAgent&lt;AgentState&gt;<br/>(datasets, active_layers,<br/>last_error)"]
+        Agent["useCoAgent&lt;AgentState&gt;<br/>(datasets, active_layers, errors)"]
     end
 
     Chat["CopilotSidebar"] -->|user input| Agent
-    Agent -->|state_delta from SSE| Local
-    Local -->|effect: mirror| Agent
+    Backend[("FastAPI<br/>+ agent")] -->|state_delta SSE| Agent
 
-    Local -->|datasets| Panel["DatasetPanel"]
-    Local -->|activeLayers| Map["MapView + DatasetLayer"]
-    Map -->|GET /api/datasets/[id]| Backend[("FastAPI<br/>+ result_store")]
-    Draw["DrawTool"] -->|polygon| Local
-    Draw -->|POST /api/datasets/drawing| Backend
+    Agent -->|datasets| Panel["DatasetPanel"]
+    Agent -->|active_layers| Map["MapView + DatasetLayer"]
+    Map -->|GET /api/datasets/[id]| Backend
+    Draw["DrawTool"] -->|polygon| Agent
+    Agent -->|setState| Backend
+    Draw -.->|POST /api/datasets/drawing| Backend
 ```
 
-The mirroring is asymmetric on purpose: the local state is the source of truth for *what the user has done in this browser*, and `agentState` is what the LLM sees on its next turn. Without the mirror, the LLM would never know about a polygon the user just drew.
+The earlier design kept a local mirror of `datasets` / `activeLayers` in `GeoPage` and pushed it into `agentState` via a `useEffect`. That mirror was load-bearing because `state_schema=AgentState` was never wired into the LangGraph agent — so tool-driven state writes were silently dropped, and only the mirror kept the system coherent. With `state_schema` wired and `select_features` / `filter_attributes` / `show_on_map` writing through `Command`, the mirror is no longer needed.
 
 ### 3.2 Drawing as dataset
 
@@ -320,7 +325,7 @@ Not everything goes through SSE. The agent state carries only **lightweight meta
 |---|---|
 | Streaming text tokens | Full GeoJSON for a dataset |
 | Tool calls and tool results (compact JSON) | Dataset metadata (full `DatasetMeta`) |
-| `state_delta`: changes to `datasets`, `active_layers`, `last_error` | User-drawn polygon (POST) |
+| `state_delta`: changes to `datasets`, `active_layers`, `errors` | User-drawn polygon (POST) |
 | Final `AIMessage` | |
 
 ### 3.4 Layer lifecycle on the map
@@ -390,9 +395,10 @@ A few decisions are worth calling out because they shape how the system behaves 
 2. **The agent state is intentionally light.** It carries `DatasetMetaLite`, never full GeoJSON. This keeps SSE traffic small and forces a clean separation: agent reasons about metadata, MapLibre fetches geometry by URL.
 3. **OGC filters are pushed to the server.** Spatial and attribute filters are translated to OGC FES 2.0 XML in `services/ogc_filter.py` and executed by the WFS server. The client never holds more than `MAX_FEATURES_PER_QUERY` features at a time.
 4. **Drawings are datasets.** A user polygon is stored exactly like a query result, with `operation = "user_drawing"`. This means the LLM can reason about user input and tool output uniformly.
-5. **`show_on_map` / `hide_on_map` are tools, not UI commands.** They mutate `AgentState.active_layers` via a LangGraph `Command`, so map visibility is part of the agent's worldview and survives restoration of state.
-6. **Local LLM by default.** The model is Ollama Gemma 4 with `temperature=0`. Swapping in another tool-calling model (e.g. `qwen2.5:7b`, `llama3.1:8b`) only requires changing `OLLAMA_MODEL` in the env file.
-7. **Single-user, single-thread.** A `threadId` is held in `sessionStorage`. There's no multi-user state and no cross-tab synchronization — the model is "one analyst, one browser tab".
+5. **`show_on_map` / `hide_on_map` are tools, not UI commands.** They mutate `AgentState.active_layers` via a LangGraph `Command`, so map visibility is part of the agent's worldview. Both tools also pre-validate `dataset_id` against the result store and emit a structured `ToolError` (with `suggestion` listing valid IDs) when the LLM hallucinates one.
+6. **Errors are first-class state.** `AgentState.errors: list[ToolError]` is appended to via a capped reducer and rendered by `useCoAgentStateRender`. Each entry carries `code`, `message`, and an optional `suggestion`. The LLM sees the error in the next turn's `ToolMessage` and can self-correct; the user sees the latest entry in the chat.
+7. **Local LLM by default.** Swapping models is a one-line `OLLAMA_MODEL=` change. Qwen2.5 7B is the current default for tool-calling reliability; Mistral-Small or Hermes-3 are reasonable upgrades for longer chains.
+8. **Single-user, single-thread.** A `threadId` is held in `sessionStorage`. There's no multi-user state and no cross-tab synchronization — the model is "one analyst, one browser tab".
 
 ---
 
