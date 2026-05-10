@@ -1,14 +1,19 @@
 import {
   CopilotRuntime,
-  copilotRuntimeNextJSAppRouterEndpoint,
   ExperimentalEmptyAdapter,
+  copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
+import { LangGraphHttpAgent } from "@copilotkit/runtime/langgraph";
 import { NextRequest } from "next/server";
 
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 const runtime = new CopilotRuntime({
-  remoteEndpoints: [{ url: `${BACKEND_URL}/copilotkit` }],
+  agents: {
+    "geo-agent": new LangGraphHttpAgent({
+      url: `${BACKEND_URL}/agents/geo-agent`,
+    }),
+  },
 });
 
 export const POST = async (req: NextRequest) => {

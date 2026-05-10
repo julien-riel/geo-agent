@@ -1,4 +1,5 @@
 from langchain_ollama import ChatOllama
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
 
 from geo_agent.agent.prompts import SYSTEM_PROMPT
@@ -29,4 +30,9 @@ def build_agent(settings: Settings):
         model=settings.OLLAMA_MODEL,
         temperature=0.3,
     )
-    return create_react_agent(model=llm, tools=TOOLS, prompt=SYSTEM_PROMPT)
+    return create_react_agent(
+        model=llm,
+        tools=TOOLS,
+        prompt=SYSTEM_PROMPT,
+        checkpointer=MemorySaver(),
+    )
