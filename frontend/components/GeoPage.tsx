@@ -29,24 +29,23 @@ export function GeoPage() {
     setDrawing(false);
   };
   const onToggle = (id: string) => {
-    const next = state.active_layers.includes(id)
-      ? state.active_layers.filter((x) => x !== id)
-      : [...state.active_layers, id];
-    setState({ ...state, active_layers: next });
+    const current = state?.active_layers || [];
+    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+    setState({ ...(state || { datasets: [], current_drawing: null, active_layers: [], last_error: null }), active_layers: next });
   };
 
   return (
     <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
       <MapView>
         {drawing && <DrawTool onPolygon={onPolygon} />}
-        {state.active_layers.map((id) => (
+        {state?.active_layers?.map((id) => (
           <DatasetLayer key={id} datasetId={id} />
         ))}
       </MapView>
 
       <DatasetPanel
-        datasets={state.datasets as any}
-        activeLayers={state.active_layers}
+        datasets={(state?.datasets as any) || []}
+        activeLayers={state?.active_layers || []}
         onToggle={onToggle}
         onDraw={onDraw}
         drawingActive={drawing}
