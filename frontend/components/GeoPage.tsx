@@ -26,10 +26,14 @@ export function GeoPage() {
 
   if (!threadId) return null;
 
-  return <GeoPageBody key={threadId} threadId={threadId} onNewConversation={onNewConversation} />;
+  return (
+    <ThreadsProvider key={threadId} threadId={threadId}>
+      <GeoPageBody onNewConversation={onNewConversation} />
+    </ThreadsProvider>
+  );
 }
 
-function GeoPageBody({ threadId, onNewConversation }: { threadId: string; onNewConversation: () => void }) {
+function GeoPageBody({ onNewConversation }: { onNewConversation: () => void }) {
   const { state, setState } = useCoAgent<AgentState>({
     name: "geo-agent",
     initialState: { datasets: [], active_layers: [], last_error: null },
@@ -75,30 +79,28 @@ function GeoPageBody({ threadId, onNewConversation }: { threadId: string; onNewC
   };
 
   return (
-    <ThreadsProvider threadId={threadId}>
-      <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
-        <MapView>
-          {drawing && <DrawTool onPolygon={onPolygon} />}
-          {state?.active_layers?.map((id) => (
-            <DatasetLayer key={id} datasetId={id} />
-          ))}
-        </MapView>
+    <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
+      <MapView>
+        {drawing && <DrawTool onPolygon={onPolygon} />}
+        {state?.active_layers?.map((id) => (
+          <DatasetLayer key={id} datasetId={id} />
+        ))}
+      </MapView>
 
-        <DatasetPanel
-          datasets={(state?.datasets as DatasetMetaLite[]) || []}
-          activeLayers={state?.active_layers || []}
-          onToggle={onToggle}
-          onDraw={onDraw}
-          drawingActive={drawing}
-        />
+      <DatasetPanel
+        datasets={(state?.datasets as DatasetMetaLite[]) || []}
+        activeLayers={state?.active_layers || []}
+        onToggle={onToggle}
+        onDraw={onDraw}
+        drawingActive={drawing}
+      />
 
-        <CopilotSidebar
-          defaultOpen={true}
-          instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
-          labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
-          Header={() => <ChatHeader onNewConversation={onNewConversation} />}
-        />
-      </div>
-    </ThreadsProvider>
+      <CopilotSidebar
+        defaultOpen={true}
+        instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
+        labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
+        Header={() => <ChatHeader onNewConversation={onNewConversation} />}
+      />
+    </div>
   );
 }
