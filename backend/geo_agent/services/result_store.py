@@ -103,12 +103,25 @@ class FileSystemResultStore:
         meta_path.write_text(meta.model_dump_json())
         return rid
 
+    def _resolve_id(self, id_or_alias: str) -> str:
+        """Return the canonical dataset id, accepting either the id or an alias."""
+        direct = self._results_dir / f"{id_or_alias}.json"
+        if direct.exists():
+            return id_or_alias
+        for p in self._results_dir.glob("result_*.json"):
+            meta = DatasetMeta.model_validate_json(p.read_text())
+            if meta.alias == id_or_alias:
+                return meta.id
+        raise FileNotFoundError(f"dataset {id_or_alias!r} not found (no id or alias match)")
+
     def get_geojson(self, id: str) -> dict:
-        return json.loads((self._results_dir / f"{id}.geojson").read_text())
+        rid = self._resolve_id(id)
+        return json.loads((self._results_dir / f"{rid}.geojson").read_text())
 
     def get_meta(self, id: str) -> DatasetMeta:
+        rid = self._resolve_id(id)
         return DatasetMeta.model_validate_json(
-            (self._results_dir / f"{id}.json").read_text()
+            (self._results_dir / f"{rid}.json").read_text()
         )
 
     def list(self) -> list[DatasetMeta]:

@@ -77,3 +77,38 @@ def test_counter_persists_across_instances(data_dir: Path) -> None:
     s2 = FileSystemResultStore(data_dir=data_dir)
     rid = s2.put(_sample_geojson(), {"source": {"type": "wfs", "layer": "x", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "test", "params": {}}})
     assert rid == "result_002"
+
+
+def test_get_meta_resolves_alias_to_id(data_dir: Path) -> None:
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    store = FileSystemResultStore(data_dir=data_dir)
+    rid = store.put(
+        {"type": "FeatureCollection", "features": []},
+        {"alias": "zone_42", "source": {"type": "user_drawing", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "user_drawing", "params": {}}},
+    )
+    by_id = store.get_meta(rid)
+    by_alias = store.get_meta("zone_42")
+    assert by_id == by_alias
+
+
+def test_get_geojson_resolves_alias_to_id(data_dir: Path) -> None:
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    store = FileSystemResultStore(data_dir=data_dir)
+    gj = {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {}}]}
+    store.put(
+        gj,
+        {"alias": "zone_99", "source": {"type": "user_drawing", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "user_drawing", "params": {}}},
+    )
+    loaded = store.get_geojson("zone_99")
+    assert loaded["features"][0]["geometry"]["coordinates"] == [0, 0]
+
+
+def test_get_meta_unknown_raises_filenotfounderror(data_dir: Path) -> None:
+    import pytest
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    store = FileSystemResultStore(data_dir=data_dir)
+    with pytest.raises(FileNotFoundError):
+        store.get_meta("nonexistent_id_or_alias")
