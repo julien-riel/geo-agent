@@ -2,7 +2,7 @@
 
 import { ThreadsProvider, useCoAgent, useCoAgentStateRender } from "@copilotkit/react-core";
 import { CopilotSidebar } from "@copilotkit/react-ui";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChatHeader } from "@/components/ChatHeader";
 import { DatasetPanel } from "@/components/DatasetPanel";
@@ -13,6 +13,40 @@ import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
 
 const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [] };
+
+// Gemma sometimes emits a fenced code block with no body (```json\n```), which
+// CopilotKit's markdown renderer turns into String(undefined) === "undefined"
+// inside a styled CodeBlock. Override `code` to suppress that artefact while
+// preserving inline-code styling and a basic block render for real content.
+function MarkdownCode({
+  children,
+  className,
+  ...rest
+}: {
+  children?: React.ReactNode;
+  className?: string;
+}) {
+  const content = children == null ? "" : String(children);
+  if (content === "" || content === "undefined") return null;
+  const match = /language-(\w+)/.exec(className ?? "");
+  const isInline = !match && !content.includes("\n");
+  if (isInline) {
+    return (
+      <code
+        className={`copilotKitMarkdownElement copilotKitInlineCode ${className ?? ""}`}
+        {...rest}
+      >
+        {children}
+      </code>
+    );
+  }
+  return (
+    <code className={className} {...rest}>
+      {children}
+    </code>
+  );
+}
+const markdownTagRenderers = { code: MarkdownCode };
 
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
@@ -36,9 +70,45 @@ function GeoPageBody() {
     initialState: EMPTY_STATE,
   });
   const [drawing, setDrawing] = useState(false);
+  const [hydratedDatasets, setHydratedDatasets] = useState<DatasetMetaLite[] | null>(null);
+  const pushed = useRef(false);
 
   const datasets = agentState?.datasets ?? [];
   const activeLayers = agentState?.active_layers ?? [];
+
+  // Step 1: fetch datasets that already live on disk (e.g. from prior browser
+  // sessions — the result store has no session isolation in this POC).
+  useEffect(() => {
+    fetch("/api/datasets")
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((rows: Array<{ id: string; alias: string | null; feature_count: number; bbox: [number, number, number, number]; source: { layer: string | null }; lineage: { operation: string } }>) => {
+        setHydratedDatasets(
+          rows.map((m) => ({
+            id: m.id,
+            alias: m.alias,
+            feature_count: m.feature_count,
+            bbox: m.bbox,
+            layer: m.source?.layer ?? null,
+            operation: m.lineage?.operation ?? "unknown",
+          }))
+        );
+      })
+      .catch((err) => console.error("hydrate datasets failed", err));
+  }, []);
+
+  // Step 2: once both the fetched list and a properly-shaped agentState are
+  // available, push them in. This effect runs with a fresh setAgentState
+  // closure on every agentState change, sidestepping the stale-callback issue
+  // that arises when the CopilotKit runtime replaces the provisional agent
+  // with the real one mid-fetch.
+  useEffect(() => {
+    if (pushed.current) return;
+    if (!hydratedDatasets) return;
+    if (!agentState || !("datasets" in agentState)) return;
+    if (datasets.length > 0) return; // some other path already populated
+    pushed.current = true;
+    setAgentState({ ...agentState, datasets: hydratedDatasets });
+  }, [hydratedDatasets, agentState, datasets.length, setAgentState]);
 
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
@@ -115,6 +185,7 @@ function GeoPageBody() {
         instructions="Demande des analyses spatiales sur les couches WFS de Montréal. Dessine une zone, puis pose ta question."
         labels={{ title: "Géo-agent", initial: "Je peux interroger les couches WFS de Montréal. Dessine une zone et demande." }}
         Header={() => <ChatHeader onNewConversation={onNewConversation} />}
+        markdownTagRenderers={markdownTagRenderers}
       />
     </div>
   );
