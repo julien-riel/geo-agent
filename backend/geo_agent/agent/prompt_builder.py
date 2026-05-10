@@ -1,5 +1,9 @@
 from typing import Any
 
+from langchain_core.messages import BaseMessage, SystemMessage
+
+from geo_agent.agent.prompts import SYSTEM_PROMPT
+
 
 def format_datasets_summary(datasets: list[dict[str, Any]]) -> str:
     """Render a compact bullet list of datasets for inclusion in the system prompt."""
@@ -17,3 +21,11 @@ def format_datasets_summary(datasets: list[dict[str, Any]]) -> str:
             f"bbox={bbox_str})"
         )
     return "\n".join(lines)
+
+
+def build_prompt(state: dict) -> list[BaseMessage]:
+    """LangGraph `prompt=` callable: prepend a SystemMessage with the dataset summary."""
+    summary = format_datasets_summary(state.get("datasets") or [])
+    sys_text = f"{SYSTEM_PROMPT}\n---\n{summary}"
+    messages = state.get("messages") or []
+    return [SystemMessage(content=sys_text), *messages]
