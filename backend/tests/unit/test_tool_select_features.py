@@ -85,3 +85,56 @@ async def test_select_features_too_many_returns_error(services: Services) -> Non
     )
 
     assert result["error"]["code"] == "too_many_features"
+
+
+async def test_select_features_use_geometry_true_with_drawing(services: Services) -> None:
+    polygon = {
+        "type": "Polygon",
+        "coordinates": [[[-73.6, 45.5], [-73.55, 45.5], [-73.55, 45.55], [-73.6, 45.55], [-73.6, 45.5]]],
+    }
+    drawing_id = services.store.put(
+        {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": polygon, "properties": {}}]},
+        {
+            "source": {"type": "user_drawing", "filter_summary": "user-drawn polygon"},
+            "lineage": {"parent_ids": [], "operation": "user_drawing", "params": {}},
+        },
+    )
+
+    result = await select_features.ainvoke(
+        {
+            "layer": "montreal:parcs",
+            "geometry_source": {"type": "dataset", "dataset_id": drawing_id, "use_geometry": True},
+            "spatial_predicate": "within",
+            "alias": "parcs_in_zone",
+        }
+    )
+
+    assert "dataset_id" in result, result
+    sf_arg = services.wfs.get_features.call_args.kwargs["spatial_filter"]
+    assert sf_arg.geometry["type"] == "Polygon"
+    # Coordinates: shapely round-trip preserves these exactly for an explicit polygon
+    assert sf_arg.geometry["coordinates"][0][0] == [-73.6, 45.5] or tuple(sf_arg.geometry["coordinates"][0][0]) == (-73.6, 45.5)
+
+
+async def test_select_features_use_geometry_true_multipolygon_returns_error(services: Services) -> None:
+    parent_id = services.store.put(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}, "properties": {}},
+                {"type": "Feature", "geometry": {"type": "Polygon", "coordinates": [[[10, 10], [11, 10], [11, 11], [10, 11], [10, 10]]]}, "properties": {}},
+            ],
+        },
+        {"source": {"type": "wfs", "layer": "montreal:parcs", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select_features", "params": {}}},
+    )
+
+    result = await select_features.ainvoke(
+        {
+            "layer": "montreal:chaussees",
+            "geometry_source": {"type": "dataset", "dataset_id": parent_id, "use_geometry": True},
+            "spatial_predicate": "intersects",
+            "alias": None,
+        }
+    )
+
+    assert result["error"]["code"] == "unsupported_geometry"
