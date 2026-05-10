@@ -66,7 +66,7 @@ export function MetadataWidget({ data, datasetId, status, onShowOnMap, onFitMap 
 
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Lignée</div>
-        <Lineage parents={data.lineage.parent_ids} operation={data.lineage.operation} current={data.id} />
+        <Lineage parents={data.lineage.parent_ids} operation={data.lineage.operation} current={data.alias ?? data.id} />
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -87,7 +87,7 @@ function Tile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Lineage({ parents, operation }: { parents: string[]; operation: string; current: string }) {
+function Lineage({ parents, operation, current }: { parents: string[]; operation: string; current: string }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, flexWrap: "wrap" }}>
       {parents.map((p) => (
@@ -97,6 +97,8 @@ function Lineage({ parents, operation }: { parents: string[]; operation: string;
         </span>
       ))}
       <span style={{ background: "#dbeafe", padding: "2px 6px", borderRadius: 3, fontFamily: "monospace" }}>{operation}</span>
+      <span style={{ color: "#94a3b8" }}>→</span>
+      <span style={{ background: "#dcfce7", padding: "2px 6px", borderRadius: 3, fontFamily: "monospace", fontWeight: 600 }}>{current}</span>
     </div>
   );
 }

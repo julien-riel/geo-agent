@@ -28,11 +28,19 @@ const META = {
 describe("MetadataWidget", () => {
   it("renders id, alias and the three stat tiles", () => {
     render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
-    expect(screen.getByText("routes_in_zone_1")).toBeInTheDocument();
-    expect(screen.getByText("result_002")).toBeInTheDocument();
+    // Alias appears in both the header and the breadcrumb terminus.
+    expect(screen.getAllByText("routes_in_zone_1").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("result_002")).toBeInTheDocument(); // id only in header (terminus shows alias, not id)
     expect(screen.getByText("1 247")).toBeInTheDocument(); // feature_count formatted
     expect(screen.getByText("geobase:chaussee")).toBeInTheDocument();
     expect(screen.getByText(/412/)).toBeInTheDocument(); // size in KB
+  });
+
+  it("renders the breadcrumb terminus with the dataset alias", () => {
+    render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
+    // Both header and breadcrumb terminus render the alias — at least 2 occurrences.
+    const matches = screen.getAllByText("routes_in_zone_1");
+    expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders the lineage breadcrumb", () => {
