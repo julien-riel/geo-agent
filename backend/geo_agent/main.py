@@ -1,7 +1,20 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="Géo-agent backend")
+from geo_agent.agent.registry import init_services
+from geo_agent.config import get_settings
+from geo_agent.routes.datasets import router as datasets_router
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_services(get_settings())
+    yield
+
+
+app = FastAPI(title="Géo-agent backend", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -10,6 +23,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(datasets_router)
 
 
 @app.get("/health")
