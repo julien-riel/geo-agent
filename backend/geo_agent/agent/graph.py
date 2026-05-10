@@ -28,7 +28,7 @@ def build_agent(settings: Settings):
     llm = ChatOllama(
         base_url=settings.OLLAMA_BASE_URL,
         model=settings.OLLAMA_MODEL,
-        temperature=0.3,
+        temperature=0,
     )
     return create_react_agent(
         model=llm,

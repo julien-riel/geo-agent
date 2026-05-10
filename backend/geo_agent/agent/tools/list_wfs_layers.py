@@ -14,11 +14,6 @@ async def list_wfs_layers() -> list[dict]:
     services = get_services()
     layers = await services.wfs.get_layers()
     return [
-        {
-            "name": l.name,
-            "title": l.title,
-            "abstract": l.abstract or "",
-            "bbox": list(l.bbox) if l.bbox else None,
-        }
+        {"name": l.name, "title": l.title}
         for l in layers
     ]
