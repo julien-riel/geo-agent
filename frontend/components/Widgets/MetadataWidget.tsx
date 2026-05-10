@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SchemaWidget } from "./SchemaWidget";
 
 interface DatasetMetaPayload {
@@ -16,11 +16,18 @@ interface DatasetMetaPayload {
 }
 
 interface Props {
-  data: DatasetMetaPayload;
+  // Tool results may be partial during streaming or for tools that only return
+  // a small subset of DatasetMeta (e.g. select_features). The widget will
+  // self-hydrate from /api/datasets/{id}/meta when the payload is incomplete.
+  data: Partial<DatasetMetaPayload> | undefined;
   datasetId: string;
   status: "executing" | "complete" | "inProgress";
   onShowOnMap?: (id: string) => void;
   onFitMap?: (bbox: [number, number, number, number]) => void;
+}
+
+function isCompleteMeta(d: Partial<DatasetMetaPayload> | undefined): d is DatasetMetaPayload {
+  return Boolean(d && d.id && d.lineage && d.source && typeof d.feature_count === "number");
 }
 
 function formatCount(n: number): string {
@@ -33,10 +40,27 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1000 / 1000).toFixed(1)} MB`;
 }
 
-export function MetadataWidget({ data, datasetId, status, onShowOnMap, onFitMap }: Props) {
+export function MetadataWidget({ data: rawData, datasetId, status, onShowOnMap, onFitMap }: Props) {
   const [showSchema, setShowSchema] = useState(false);
+  const [hydrated, setHydrated] = useState<DatasetMetaPayload | null>(null);
 
-  if (status === "executing") {
+  const meta: DatasetMetaPayload | null = hydrated ?? (isCompleteMeta(rawData) ? rawData : null);
+
+  // When the tool result is partial (e.g. select_features only returns a subset),
+  // fetch the full DatasetMeta from REST so we have lineage / source / size_bytes.
+  useEffect(() => {
+    if (meta || !datasetId) return;
+    let cancelled = false;
+    fetch(`/api/datasets/${encodeURIComponent(datasetId)}/meta`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((m) => {
+        if (!cancelled && m && isCompleteMeta(m)) setHydrated(m);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [meta, datasetId]);
+
+  if (status === "executing" || status === "inProgress" || !meta) {
     return (
       <div data-testid="metadata-skeleton" style={{ padding: 12, background: "#f1f5f9", borderRadius: 8 }}>
         <em style={{ color: "#94a3b8" }}>Chargement…</em>
@@ -45,9 +69,10 @@ export function MetadataWidget({ data, datasetId, status, onShowOnMap, onFitMap 
   }
 
   if (showSchema) {
-    return <SchemaWidget data={data} datasetId={datasetId} />;
+    return <SchemaWidget data={meta} datasetId={datasetId} />;
   }
 
+  const data = meta;
   const layerLabel = data.source?.layer ?? data.lineage.operation;
 
   return (
