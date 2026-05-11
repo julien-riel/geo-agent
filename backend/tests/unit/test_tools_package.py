@@ -4,6 +4,7 @@ def test_all_tools_re_exported_and_named() -> None:
     names = {t.name for t in ALL_TOOLS}
     expected = {
         "list_wfs_layers",
+        "describe_wfs_layer",
         "select_features",
         "filter_attributes",
         "aggregate",
