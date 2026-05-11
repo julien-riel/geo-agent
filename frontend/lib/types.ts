@@ -7,6 +7,7 @@ export const DatasetMetaLite = z.object({
   bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]),
   layer: z.string().nullable(),
   operation: z.string(),
+  parent_ids: z.array(z.string()).default([]),
 });
 export type DatasetMetaLite = z.infer<typeof DatasetMetaLite>;
 

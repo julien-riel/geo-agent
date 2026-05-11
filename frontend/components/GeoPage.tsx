@@ -87,7 +87,7 @@ function GeoPageBody() {
   useEffect(() => {
     fetch("/api/datasets")
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((rows: Array<{ id: string; alias: string | null; feature_count: number; bbox: [number, number, number, number]; source: { layer: string | null }; lineage: { operation: string } }>) => {
+      .then((rows: Array<{ id: string; alias: string | null; feature_count: number; bbox: [number, number, number, number]; source: { layer: string | null }; lineage: { operation: string; parent_ids?: string[] } }>) => {
         setHydratedDatasets(
           rows.map((m) => ({
             id: m.id,
@@ -96,6 +96,7 @@ function GeoPageBody() {
             bbox: m.bbox,
             layer: m.source?.layer ?? null,
             operation: m.lineage?.operation ?? "unknown",
+            parent_ids: m.lineage?.parent_ids ?? [],
           }))
         );
       })
