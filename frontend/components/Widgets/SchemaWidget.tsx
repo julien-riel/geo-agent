@@ -10,6 +10,7 @@ interface Props {
     attribute_schema: Record<string, string>;
   };
   datasetId: string;
+  sample?: Record<string, unknown>;
 }
 
 const TYPE_STYLES: Record<string, { bg: string; fg: string }> = {
@@ -24,16 +25,17 @@ function formatExample(v: unknown): string {
   return String(v);
 }
 
-export function SchemaWidget({ data, datasetId }: Props) {
-  const [example, setExample] = useState<Record<string, unknown> | null>(null);
+export function SchemaWidget({ data, datasetId, sample }: Props) {
+  const [example, setExample] = useState<Record<string, unknown> | null>(sample ?? null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    if (sample) return; // already supplied — no need to fetch the first feature
     fetch(`/api/datasets/${encodeURIComponent(datasetId)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("fetch failed"))))
       .then((gj) => setExample(gj.features?.[0]?.properties ?? {}))
       .catch(() => setExample({}));
-  }, [datasetId]);
+  }, [datasetId, sample]);
 
   const toggle = (attr: string) => {
     setExpanded((prev) => {
