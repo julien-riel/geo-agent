@@ -94,10 +94,13 @@ Filter an existing dataset in-memory by an attribute predicate, producing a new 
 dataset to read its `attribute_schema`.**
 
 Example — keep features above a length threshold:
-  {"dataset_id": "result_003", "predicate": {"property": "longueur", "op": "gt", "value": 200}, "alias": "longues_chaussees"}
+  {"dataset_id": "result_003", "predicate": {"property": "longueur", "op": "gt", "value": 200},
+   "alias": "longues_chaussees"}
 
 Example — keep features whose type is in a set:
-  {"dataset_id": "result_003", "predicate": {"property": "type", "op": "in", "value": ["parc", "place"]}, "alias": "parcs_et_places"}
+  {"dataset_id": "result_003",
+   "predicate": {"property": "type", "op": "in", "value": ["parc", "place"]},
+   "alias": "parcs_et_places"}
 
 In-memory operators for `predicate.op`: eq, neq, lt, gt, lte, gte, **in** (membership).
 **No `like`** here — use select_features.attribute_filter for server-side wildcard matching.
@@ -124,7 +127,8 @@ Combine two datasets geometrically, producing a new dataset.
   - "difference" → `left` minus the parts overlapping `right` (keeps left's attributes)
 
 Example — streets clipped to a zone:
-  {"left_id": "result_003", "right_id": "result_001", "op": "intersection", "alias": "rues_dans_zone"}
+  {"left_id": "result_003", "right_id": "result_001", "op": "intersection",
+   "alias": "rues_dans_zone"}
 
 ### transform_geometry
 Transform a dataset's geometry, producing a new dataset.
@@ -146,7 +150,8 @@ null joined attributes.
 `predicate`: "intersects" | "within" | "contains".
 
 Example — tag each street with the borough it falls in:
-  {"left_id": "result_003", "right_id": "result_002", "predicate": "within", "alias": "rues_avec_arrondissement"}
+  {"left_id": "result_003", "right_id": "result_002", "predicate": "within",
+   "alias": "rues_avec_arrondissement"}
 
 ### describe_dataset
 Get full metadata for a dataset by id or alias: bbox, attribute_schema, lineage. Geometry is never
@@ -160,7 +165,7 @@ is already injected below — use this tool only if you need to refresh after ma
 
 ### show_on_map / hide_on_map
 Toggle a dataset's visibility on the map. Call `show_on_map` after producing any dataset the user
-should see. Call `hide_on_map` when the user asks to remove a layer from view (the data is preserved).
+should see. Call `hide_on_map` when the user asks to remove a layer from view (data is preserved).
 
 ### inspect_dataset
 Show the user a view of a dataset in the chat (no map change). `view`:

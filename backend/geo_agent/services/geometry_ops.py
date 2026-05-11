@@ -70,7 +70,8 @@ def transform(
 ) -> dict:
     """Single-dataset geometry transformation, returning a new collection.
 
-    buffer    — requires distance_meters (metres); reprojects to EPSG:32188, buffers, reprojects back.
+    buffer    — requires distance_meters (metres); reprojects to EPSG:32188, buffers, reprojects
+               back.
     centroid  — replaces each geometry with its centroid (Point); attributes preserved.
     simplify  — requires tolerance (degrees, since the data is EPSG:4326); Douglas–Peucker.
     dissolve  — merge features; with `by` (attribute name), one feature per distinct value of that
@@ -120,7 +121,9 @@ def spatial_join(left: dict, right: dict, predicate: JoinPredicate) -> dict:
     if len(right_gdf) == 0:
         return _to_geojson(left_gdf)
 
-    right_renamed = right_gdf.rename(columns={c: f"{c}_r" for c in right_gdf.columns if c != "geometry"})
+    right_renamed = right_gdf.rename(
+        columns={c: f"{c}_r" for c in right_gdf.columns if c != "geometry"}
+    )
     joined = gpd.sjoin(left_gdf, right_renamed, how="left", predicate=predicate)
     joined = joined.drop(columns=[c for c in ("index_right", "index_left") if c in joined.columns])
     joined = joined.loc[~joined.index.duplicated(keep="first")]
