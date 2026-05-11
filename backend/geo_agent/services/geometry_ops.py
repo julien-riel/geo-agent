@@ -106,3 +106,22 @@ def transform(
         raise ValueError(f"unknown transform op: {op!r}")
 
     return _to_geojson(out)
+
+
+def spatial_join(left: dict, right: dict, predicate: JoinPredicate) -> dict:
+    """Left spatial join: every feature of `left`, with `right`'s attributes attached when
+    the spatial `predicate` holds (otherwise null). All right columns are suffixed `_r`. When a
+    left feature matches several right features, the first match wins. Geometry stays `left`'s.
+    """
+    left_gdf = _to_gdf(left)
+    if len(left_gdf) == 0:
+        return {"type": "FeatureCollection", "features": []}
+    right_gdf = _to_gdf(right)
+    if len(right_gdf) == 0:
+        return _to_geojson(left_gdf)
+
+    right_renamed = right_gdf.rename(columns={c: f"{c}_r" for c in right_gdf.columns if c != "geometry"})
+    joined = gpd.sjoin(left_gdf, right_renamed, how="left", predicate=predicate)
+    joined = joined.drop(columns=[c for c in ("index_right", "index_left") if c in joined.columns])
+    joined = joined.loc[~joined.index.duplicated(keep="first")]
+    return _to_geojson(joined)

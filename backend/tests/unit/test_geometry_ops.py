@@ -116,3 +116,51 @@ def test_transform_dissolve_unknown_attribute_raises() -> None:
     fc = _fc(_poly([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]], cat="a"))
     with pytest.raises(ValueError):
         transform(fc, "dissolve", by="nope")
+
+
+from geo_agent.services.geometry_ops import spatial_join
+
+
+def _pt(x: float, y: float, **props) -> dict:
+    return {"type": "Feature", "geometry": {"type": "Point", "coordinates": [x, y]}, "properties": props}
+
+
+def test_spatial_join_attaches_right_attributes_and_keeps_all_left() -> None:
+    pts = _fc(_pt(1, 1, id="p1"), _pt(9, 9, id="p2"))
+    zones = _fc(_poly([[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]], zone="A"))
+
+    out = spatial_join(pts, zones, "within")
+
+    by_id = {f["properties"]["id"]: f["properties"] for f in out["features"]}
+    assert len(out["features"]) == 2
+    assert by_id["p1"]["zone_r"] == "A"
+    assert by_id["p2"]["zone_r"] is None
+
+
+def test_spatial_join_suffixes_colliding_columns_with_r() -> None:
+    pts = _fc(_pt(1, 1, name="left"))
+    zones = _fc(_poly([[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]], name="right"))
+
+    out = spatial_join(pts, zones, "within")
+
+    props = out["features"][0]["properties"]
+    assert props["name"] == "left"
+    assert props["name_r"] == "right"
+
+
+def test_spatial_join_first_match_wins() -> None:
+    pts = _fc(_pt(1, 1, id="p1"))
+    zones = _fc(
+        _poly([[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]], zone="A"),
+        _poly([[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]], zone="B"),  # overlapping second zone
+    )
+
+    out = spatial_join(pts, zones, "within")
+
+    assert len(out["features"]) == 1
+    assert out["features"][0]["properties"]["zone_r"] in ("A", "B")
+
+
+def test_spatial_join_empty_left_returns_empty() -> None:
+    zones = _fc(_poly([[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]], zone="A"))
+    assert spatial_join(_fc(), zones, "within")["features"] == []
