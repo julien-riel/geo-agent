@@ -93,7 +93,8 @@ def test_system_prompt_has_filter_attributes_example() -> None:
 def test_system_prompt_distinguishes_operator_sets() -> None:
     from geo_agent.agent.prompts import SYSTEM_PROMPT
     # the prompt must call out that 'like' is server-side only and 'in' is in-memory only
-    assert "like" in SYSTEM_PROMPT and "in" in SYSTEM_PROMPT
+    assert "No `in`" in SYSTEM_PROMPT
+    assert "No `like`" in SYSTEM_PROMPT
 
 
 def test_system_prompt_has_error_section() -> None:
