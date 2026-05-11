@@ -235,13 +235,68 @@ function GeoPageBody() {
     setAgentState({ ...current, active_layers: next });
   };
 
-  const onNewConversation = () => {
+  const onNewConversation = async () => {
+    if (!window.confirm("Effacer la conversation et tous les datasets ?")) return;
+    try {
+      await fetch("/api/datasets", { method: "DELETE" });
+    } catch (e) {
+      console.error("clear datasets failed", e);
+    }
     resetThreadId();
-    // CopilotSidebar reads messages from a runtime context we can't reliably
-    // clear without remounting the whole CopilotKit provider tree. A page
-    // reload is the simplest reliable reset; the new threadId persists in
-    // sessionStorage, so we resume on a fresh thread on next mount.
     window.location.reload();
+  };
+
+  const onClearDatasets = async () => {
+    try {
+      const r = await fetch("/api/datasets", { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({ ...current, datasets: [], active_layers: [] });
+    } catch (e) {
+      console.error("clear datasets failed", e);
+    }
+  };
+
+  const onDeleteDataset = async (id: string) => {
+    try {
+      const r = await fetch(`/api/datasets/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({
+        ...current,
+        datasets: current.datasets.filter((d) => d.id !== id),
+        active_layers: current.active_layers.filter((x) => x !== id),
+      });
+    } catch (e) {
+      console.error("delete dataset failed", e);
+    }
+  };
+
+  const onRenameDataset = async (id: string, newAlias: string): Promise<string | null> => {
+    try {
+      const r = await fetch(`/api/datasets/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ alias: newAlias }),
+      });
+      if (!r.ok) {
+        try {
+          const payload = (await r.json()) as { detail?: string };
+          return payload.detail ?? `HTTP ${r.status}`;
+        } catch {
+          return `HTTP ${r.status}`;
+        }
+      }
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({
+        ...current,
+        datasets: current.datasets.map((d) => (d.id === id ? { ...d, alias: newAlias } : d)),
+      });
+      return null;
+    } catch (e) {
+      console.error("rename dataset failed", e);
+      return "network error";
+    }
   };
 
   return (
@@ -270,6 +325,9 @@ function GeoPageBody() {
           onToggle={onToggle}
           onDraw={onDraw}
           drawingActive={drawing}
+          onClearAll={onClearDatasets}
+          onDelete={onDeleteDataset}
+          onRename={onRenameDataset}
         />
 
         <CopilotSidebar
