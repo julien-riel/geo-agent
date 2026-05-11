@@ -5,6 +5,7 @@ from geo_agent.agent.tools.datasets.list_datasets import list_datasets
 from geo_agent.agent.tools.datasets.spatial_join import spatial_join
 from geo_agent.agent.tools.datasets.spatial_overlay import spatial_overlay
 from geo_agent.agent.tools.datasets.transform_geometry import transform_geometry
+from geo_agent.agent.tools.ui.inspect_dataset import inspect_dataset
 from geo_agent.agent.tools.ui.show_on_map import hide_on_map, show_on_map
 from geo_agent.agent.tools.wfs.describe_layer import describe_wfs_layer
 from geo_agent.agent.tools.wfs.list_layers import list_wfs_layers
@@ -27,6 +28,7 @@ ALL_TOOLS = [
     # UI tools
     show_on_map,
     hide_on_map,
+    inspect_dataset,
 ]
 
 __all__ = [
@@ -43,4 +45,5 @@ __all__ = [
     "transform_geometry",
     "show_on_map",
     "hide_on_map",
+    "inspect_dataset",
 ]

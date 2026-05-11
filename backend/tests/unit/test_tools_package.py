@@ -15,6 +15,7 @@ def test_all_tools_re_exported_and_named() -> None:
         "transform_geometry",
         "show_on_map",
         "hide_on_map",
+        "inspect_dataset",
     }
     assert expected.issubset(names)
 
