@@ -54,7 +54,7 @@ async def filter_attributes(
             "lineage": {
                 "parent_ids": [dataset_id],
                 "operation": "filter_attributes",
-                "params": predicate.model_dump(),
+                "params": predicate.model_dump(mode="json"),
             },
         },
     )

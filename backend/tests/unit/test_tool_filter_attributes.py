@@ -45,6 +45,7 @@ async def test_filter_attributes_creates_new_dataset(services: Services, populat
     new_meta = services.store.get_meta(new_meta_lite["id"])
     assert new_meta.lineage.parent_ids == [populated]
     assert new_meta.alias == "longues"
+    assert new_meta.lineage.params == {"property": "longueur", "op": "gt", "value": 200}
 
 
 async def test_filter_attributes_unknown_dataset_returns_command_with_error(services: Services) -> None:
@@ -70,7 +71,7 @@ async def test_filter_attributes_args_schema_rejects_unknown_op() -> None:
             "state": {},
         })
     errors = exc_info.value.errors()
-    predicate_errors = [e for e in errors if "predicate" in str(e.get("loc", ""))]
+    predicate_errors = [e for e in errors if e.get("loc", ()) and e["loc"][0] == "predicate"]
     assert predicate_errors, f"Expected a predicate validation error, got: {errors}"
 
 
