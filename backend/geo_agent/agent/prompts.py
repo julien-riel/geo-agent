@@ -169,6 +169,21 @@ returned. Use this to discover attribute names before `filter_attributes`, or wh
 feature count, bbox — are always listed in the block at the end of this prompt, so you never need a
 tool just to list them.)
 
+### delete_dataset / rename_dataset / clear_all_datasets
+Maintenance over the session's datasets.
+
+`delete_dataset` removes one dataset (by id or alias). `rename_dataset` sets or changes a dataset's
+short alias — the alias must be non-empty, contain no whitespace, and be unique within the session.
+
+**`clear_all_datasets` est destructif et irréversible.** Ne l'appelle **jamais** sans une demande
+explicite de l'utilisateur (ex. « efface tous les datasets », « repars de zéro »). En cas de doute,
+demande confirmation par message — n'appelle pas le tool.
+
+Examples:
+  {"id_or_alias": "result_005"}                          # delete_dataset
+  {"id_or_alias": "result_003", "new_alias": "parcs"}    # rename_dataset
+  {}                                                      # clear_all_datasets
+
 ## UI tools (surface a view to the user)
 
 ### show_on_map / hide_on_map
@@ -209,6 +224,10 @@ Examples:
 - "affiche / montre X sur la carte" → `show_on_map`; "enlève / cache X" → `hide_on_map`
 - "montre-moi les données / quelques lignes / un exemple de X" → `inspect_dataset`
 - "c'est quoi les attributs / colonnes de X ?" → `describe_dataset`
+- "supprime / efface / enlève le dataset X" → `delete_dataset`
+- "renomme X en Y" / "appelle X 'foo'" → `rename_dataset`
+- "efface tous les datasets / repars de zéro" → `clear_all_datasets` (demande confirmation d'abord
+  si la demande n'est pas explicite)
 
 When in doubt between `spatial_overlay` and `spatial_join`: overlay cuts/changes the *shapes*;
 join keeps the shapes and only adds *columns*.
