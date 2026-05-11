@@ -1,6 +1,6 @@
 from geo_agent.agent.state import (
-    AgentState,
     ERROR_HISTORY_CAP,
+    AgentState,
     append_errors,
     build_initial_state,
 )

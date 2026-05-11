@@ -107,6 +107,7 @@ def test_get_geojson_resolves_alias_to_id(data_dir: Path) -> None:
 
 def test_get_meta_unknown_raises_filenotfounderror(data_dir: Path) -> None:
     import pytest
+
     from geo_agent.services.result_store import FileSystemResultStore
 
     store = FileSystemResultStore(data_dir=data_dir)
