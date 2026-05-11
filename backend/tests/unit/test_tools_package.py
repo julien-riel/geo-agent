@@ -10,6 +10,7 @@ def test_all_tools_re_exported_and_named() -> None:
         "describe_dataset",
         "list_datasets",
         "spatial_overlay",
+        "transform_geometry",
         "show_on_map",
         "hide_on_map",
     }
