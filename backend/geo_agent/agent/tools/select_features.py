@@ -10,28 +10,48 @@ from shapely.ops import unary_union
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.models import DatasetMetaLite, ToolError
-from geo_agent.services.ogc_filter import (
-    AttributeFilter,
-    SpatialFilter,
-)
+from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
 from geo_agent.services.wfs_client import TooManyFeaturesError
 
 
 class PolygonSource(BaseModel):
+    """A user-provided GeoJSON Polygon (typically from a map drawing tool)."""
+
     type: Literal["polygon"]
-    polygon: dict
+    polygon: dict = Field(description="GeoJSON Polygon geometry")
 
 
 class DatasetSource(BaseModel):
+    """Chain from an existing dataset's geometry."""
+
     type: Literal["dataset"]
-    dataset_id: str
-    use_geometry: bool = False  # if False, use bbox; if True, union geometries
+    dataset_id: str = Field(description="Existing dataset id, e.g. result_001 or a user_drawing id")
+    use_geometry: bool = Field(
+        default=False,
+        description=(
+            "False (default): use the dataset's bbox as the filter polygon — fast, coarser. "
+            "True: union the dataset's geometries — precise, only works if the union is a single Polygon."
+        ),
+    )
+
+
+GeometrySource = Annotated[
+    PolygonSource | DatasetSource,
+    Field(discriminator="type"),
+]
 
 
 class AttributeFilterInput(BaseModel):
-    property: str
-    op: Literal["eq", "neq", "lt", "gt", "lte", "gte", "like"]
-    value: Any
+    """Server-side attribute filter for the WFS query. Uses OGC operators."""
+
+    property: str = Field(description="Attribute name from the layer's schema")
+    op: AttrOp = Field(
+        description=(
+            "OGC server-side operator. Note: 'in' is NOT supported here — use filter_attributes "
+            "for in-memory 'in' filtering. 'like' uses % as wildcard."
+        ),
+    )
+    value: Any = Field(description="Comparison value (string/number)")
 
 
 def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
@@ -43,7 +63,6 @@ def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
 
 
 def _union_dataset_geometries(geojson: dict) -> dict:
-    """Union all feature geometries in a FeatureCollection into a single GeoJSON geometry."""
     geoms = [shape(f["geometry"]) for f in geojson.get("features", []) if f.get("geometry")]
     if not geoms:
         raise ValueError("dataset has no geometries")
@@ -54,62 +73,63 @@ def _union_dataset_geometries(geojson: dict) -> dict:
 @tool
 async def select_features(
     layer: str,
-    geometry_source: dict,
+    geometry_source: GeometrySource,
     spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"],
     tool_call_id: Annotated[str, InjectedToolCallId],
     state: Annotated[dict, InjectedState],
-    alias: Annotated[str | None, Field(description="Human-readable name for this dataset")] = None,
-    attribute_filter: dict | None = None,
+    alias: Annotated[str | None, Field(description="Short human-readable name for the new dataset")] = None,
+    attribute_filter: AttributeFilterInput | None = None,
     distance_meters: float | None = None,
 ) -> Command:
-    """Select features from a WFS layer using an OGC spatial filter pushed to the server.
+    """Select features from a WFS layer with a server-side OGC filter.
 
-    geometry_source must be one of:
-      - {"type":"polygon","polygon": <GeoJSON Polygon>}  — typically the user's drawing
-      - {"type":"dataset","dataset_id":"result_NNN","use_geometry": false}  — chain from a previous result.
-        With use_geometry=false, the bbox of the parent dataset is used (fast).
-        With use_geometry=true, geometries are unioned (precise, larger payload).
+    Always returns a fresh dataset; never modifies the input.
 
-    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"} on success.
-    On failure, the error appears in agent state and is fed back as a tool message.
+    geometry_source examples:
+      {"type": "polygon", "polygon": {...GeoJSON Polygon...}}                    # user drawing
+      {"type": "dataset", "dataset_id": "result_003", "use_geometry": false}     # bbox of result_003
+      {"type": "dataset", "dataset_id": "zone_1_id",   "use_geometry": true}     # geometry of zone_1
+
+    spatial_predicate:
+      intersects | within | contains | bbox | dwithin (requires distance_meters)
+
+    attribute_filter (optional, server-side):
+      {"property": "type", "op": "eq", "value": "parc"}
+      Operators: eq, neq, lt, gt, lte, gte, like (NO 'in' — use filter_attributes for that).
+
+    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"}.
+    On failure, an error is stored in state.errors and surfaced as a ToolMessage with code:
+      too_many_features, dataset_not_found, unsupported_geometry, bad_input.
     """
     services = get_services()
 
-    try:
-        gsrc = (PolygonSource if geometry_source.get("type") == "polygon" else DatasetSource).model_validate(geometry_source)
-    except Exception as e:
-        return tool_error_command(
-            ToolError(code="bad_input", message=f"Invalid geometry_source: {e}"),
-            tool_call_id,
-        )
-
-    if isinstance(gsrc, PolygonSource):
-        geom = gsrc.polygon
+    if isinstance(geometry_source, PolygonSource):
+        geom = geometry_source.polygon
         parent_ids: list[str] = []
         filter_summary = f"{spatial_predicate}(user_polygon)"
     else:
         try:
-            meta = services.store.get_meta(gsrc.dataset_id)
+            meta = services.store.get_meta(geometry_source.dataset_id)
         except FileNotFoundError:
             known = [m.id for m in services.store.list()]
             return tool_error_command(
                 ToolError(
                     code="dataset_not_found",
-                    message=f"No dataset {gsrc.dataset_id}",
+                    message=f"No dataset {geometry_source.dataset_id}",
                     suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
                 ),
                 tool_call_id,
             )
-        parent_ids = [gsrc.dataset_id]
-        if gsrc.use_geometry:
-            gj = services.store.get_geojson(gsrc.dataset_id)
+        parent_ids = [geometry_source.dataset_id]
+        if geometry_source.use_geometry:
+            gj = services.store.get_geojson(geometry_source.dataset_id)
             geom = _union_dataset_geometries(gj)
             if geom["type"] != "Polygon":
                 return tool_error_command(
                     ToolError(
                         code="unsupported_geometry",
                         message=(
-                            f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; "
+                            f"Unioned geometry of {geometry_source.dataset_id} is {geom['type']}; "
                             "only Polygon is supported as a spatial filter today."
                         ),
                         suggestion=(
@@ -119,16 +139,14 @@ async def select_features(
                     ),
                     tool_call_id,
                 )
-            filter_summary = f"{spatial_predicate}(geometry of {gsrc.dataset_id})"
+            filter_summary = f"{spatial_predicate}(geometry of {geometry_source.dataset_id})"
         else:
             geom = _bbox_polygon(meta.bbox)
-            filter_summary = f"{spatial_predicate}(bbox of {gsrc.dataset_id})"
+            filter_summary = f"{spatial_predicate}(bbox of {geometry_source.dataset_id})"
 
-    # Discover geom_property
     schema = await services.wfs.describe_feature_type(layer)
     geom_property = schema.geom_property
 
-    # Build filters
     if spatial_predicate == "dwithin":
         if distance_meters is None:
             return tool_error_command(
@@ -141,14 +159,7 @@ async def select_features(
 
     af: AttributeFilter | None = None
     if attribute_filter is not None:
-        try:
-            ai = AttributeFilterInput.model_validate(attribute_filter)
-            af = AttributeFilter(property=ai.property, op=ai.op, value=ai.value)
-        except Exception as e:
-            return tool_error_command(
-                ToolError(code="bad_input", message=f"Invalid attribute_filter: {e}"),
-                tool_call_id,
-            )
+        af = AttributeFilter(property=attribute_filter.property, op=attribute_filter.op, value=attribute_filter.value)
 
     try:
         gj = await services.wfs.get_features(

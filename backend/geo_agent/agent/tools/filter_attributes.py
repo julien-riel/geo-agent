@@ -13,15 +13,23 @@ from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribu
 @tool
 async def filter_attributes(
     dataset_id: str,
-    predicate: dict,
+    predicate: AttributePredicate,
     tool_call_id: Annotated[str, InjectedToolCallId],
     state: Annotated[dict, InjectedState],
     alias: str | None = None,
 ) -> Command:
-    """Filter a dataset by an attribute predicate, producing a new dataset.
+    """Filter an existing dataset in-memory by an attribute predicate, producing a new dataset.
 
-    predicate is {"property": str, "op": "eq"|"neq"|"lt"|"gt"|"lte"|"gte"|"in", "value": <any>}.
-    The new dataset has parent_ids=[<source_dataset_id>] in its lineage.
+    predicate examples:
+      {"property": "type", "op": "eq", "value": "parc"}
+      {"property": "longueur", "op": "gt", "value": 200}
+      {"property": "type", "op": "in", "value": ["parc", "place"]}
+
+    Operators: eq, neq, lt, gt, lte, gte, in.
+    Note: 'like' (wildcard) is NOT supported here — use select_features.attribute_filter
+    when you need server-side wildcard matching.
+
+    The new dataset has lineage.parent_ids=[<source_dataset_id>].
     """
     services = get_services()
     try:
@@ -37,24 +45,16 @@ async def filter_attributes(
             tool_call_id,
         )
 
-    try:
-        pred = AttributePredicate.model_validate(predicate)
-    except Exception as e:
-        return tool_error_command(
-            ToolError(code="bad_input", message=f"Bad predicate: {e}"),
-            tool_call_id,
-        )
-
-    out = filter_by_attribute(gj, pred)
+    out = filter_by_attribute(gj, predicate)
     new_id = services.store.put(
         out,
         {
             "alias": alias,
-            "source": {"type": "derived", "filter_summary": f"{pred.property} {pred.op} {pred.value}"},
+            "source": {"type": "derived", "filter_summary": f"{predicate.property} {predicate.op} {predicate.value}"},
             "lineage": {
                 "parent_ids": [dataset_id],
                 "operation": "filter_attributes",
-                "params": predicate,
+                "params": predicate.model_dump(mode="json"),
             },
         },
     )

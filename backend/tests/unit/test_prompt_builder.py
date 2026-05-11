@@ -77,3 +77,32 @@ def test_build_prompt_handles_missing_datasets() -> None:
 
     assert isinstance(out[0], SystemMessage)
     assert "(none)" in out[0].content
+
+
+def test_system_prompt_mentions_hide_on_map() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    assert "hide_on_map" in SYSTEM_PROMPT
+
+
+def test_system_prompt_has_filter_attributes_example() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    # the example block uses a JSON-like literal so the LLM has a concrete shape to copy
+    assert '"op": "in"' in SYSTEM_PROMPT or '"op": "gt"' in SYSTEM_PROMPT
+
+
+def test_system_prompt_distinguishes_operator_sets() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    # the prompt must call out that 'like' is server-side only and 'in' is in-memory only
+    assert "No `in`" in SYSTEM_PROMPT
+    assert "No `like`" in SYSTEM_PROMPT
+
+
+def test_system_prompt_has_error_section() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    assert "too_many_features" in SYSTEM_PROMPT
+    assert "dataset_not_found" in SYSTEM_PROMPT
+
+
+def test_system_prompt_recommends_describe_dataset_before_filter() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    assert "describe_dataset" in SYSTEM_PROMPT

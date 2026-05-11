@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from geo_agent.agent.registry import Services, _services
+from geo_agent.agent.registry import Services
 from geo_agent.agent.tools.list_wfs_layers import list_wfs_layers
 from geo_agent.config import Settings
 from geo_agent.models import WFSLayer
@@ -29,5 +29,24 @@ async def test_list_wfs_layers_returns_summary(services_with_mock_wfs: Services)
     assert isinstance(result, list)
     assert len(result) == 2
     assert result[0]["name"] == "montreal:parcs"
+    assert result[0]["abstract"] == ""
     assert "title" in result[0]
     assert "abstract" in result[1]
+
+
+async def test_list_wfs_layers_includes_abstract(monkeypatch: pytest.MonkeyPatch) -> None:
+    wfs_mock = AsyncMock()
+    wfs_mock.get_layers.return_value = [
+        WFSLayer(
+            name="montreal:parcs",
+            title="Parcs",
+            abstract="Parcs et espaces verts de la Ville",
+            default_crs="EPSG:4326",
+        ),
+    ]
+    services = Services(settings=Settings(), wfs=wfs_mock, store=None)  # type: ignore[arg-type]
+    monkeypatch.setattr("geo_agent.agent.tools.list_wfs_layers.get_services", lambda: services)
+
+    out = await list_wfs_layers.ainvoke({})
+
+    assert out == [{"name": "montreal:parcs", "title": "Parcs", "abstract": "Parcs et espaces verts de la Ville"}]

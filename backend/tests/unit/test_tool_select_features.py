@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from geo_agent.agent.registry import Services
-from geo_agent.agent.tools.select_features import select_features
+from geo_agent.agent.tools.select_features import DatasetSource, PolygonSource, select_features
 from geo_agent.config import Settings
 from geo_agent.services.result_store import FileSystemResultStore
 from geo_agent.services.wfs_client import FeatureTypeSchema
@@ -34,7 +34,7 @@ async def test_select_features_with_polygon(services: Services) -> None:
     polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
     result = await select_features.coroutine(
         layer="montreal:parcs",
-        geometry_source={"type": "polygon", "polygon": polygon},
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
         spatial_predicate="within",
         alias="parcs_test",
         tool_call_id="t",
@@ -57,7 +57,7 @@ async def test_select_features_chains_from_dataset_using_bbox(services: Services
 
     result = await select_features.coroutine(
         layer="montreal:chaussees",
-        geometry_source={"type": "dataset", "dataset_id": rid, "use_geometry": False},
+        geometry_source=DatasetSource(type="dataset", dataset_id=rid, use_geometry=False),
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
@@ -79,7 +79,7 @@ async def test_select_features_too_many_returns_command_with_error(services: Ser
     polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
     result = await select_features.coroutine(
         layer="montreal:parcs",
-        geometry_source={"type": "polygon", "polygon": polygon},
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
         spatial_predicate="within",
         alias=None,
         tool_call_id="t",
@@ -92,7 +92,7 @@ async def test_select_features_too_many_returns_command_with_error(services: Ser
 async def test_select_features_unknown_dataset_returns_command_with_suggestion(services: Services) -> None:
     result = await select_features.coroutine(
         layer="montreal:parcs",
-        geometry_source={"type": "dataset", "dataset_id": "result_999", "use_geometry": False},
+        geometry_source=DatasetSource(type="dataset", dataset_id="result_999", use_geometry=False),
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
@@ -119,7 +119,7 @@ async def test_select_features_use_geometry_true_with_drawing(services: Services
 
     result = await select_features.coroutine(
         layer="montreal:parcs",
-        geometry_source={"type": "dataset", "dataset_id": drawing_id, "use_geometry": True},
+        geometry_source=DatasetSource(type="dataset", dataset_id=drawing_id, use_geometry=True),
         spatial_predicate="within",
         alias="parcs_in_zone",
         tool_call_id="t",
@@ -146,7 +146,7 @@ async def test_select_features_use_geometry_true_multipolygon_returns_command_wi
 
     result = await select_features.coroutine(
         layer="montreal:chaussees",
-        geometry_source={"type": "dataset", "dataset_id": parent_id, "use_geometry": True},
+        geometry_source=DatasetSource(type="dataset", dataset_id=parent_id, use_geometry=True),
         spatial_predicate="intersects",
         alias=None,
         tool_call_id="t",
@@ -154,3 +154,49 @@ async def test_select_features_use_geometry_true_multipolygon_returns_command_wi
     )
 
     assert result.update["errors"][0]["code"] == "unsupported_geometry"
+
+
+async def test_select_features_args_schema_rejects_unknown_geometry_source_type(services: Services) -> None:
+    from pydantic import ValidationError
+
+    schema = select_features.args_schema
+    with pytest.raises(ValidationError):
+        schema.model_validate({
+            "layer": "montreal:parcs",
+            "geometry_source": {"type": "banana", "polygon": {}},
+            "spatial_predicate": "within",
+        })
+
+
+async def test_select_features_with_attribute_filter_reaches_wfs(services: Services) -> None:
+    from geo_agent.agent.tools.select_features import AttributeFilterInput, PolygonSource
+
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
+        spatial_predicate="within",
+        attribute_filter=AttributeFilterInput(property="type", op="eq", value="parc"),
+        alias="parcs_eq",
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    af_arg = services.wfs.get_features.call_args.kwargs["attribute_filter"]
+    assert af_arg is not None
+    assert af_arg.property == "type"
+    assert af_arg.op == "eq"
+    assert af_arg.value == "parc"
+
+
+async def test_select_features_args_schema_accepts_dataset_source(services: Services) -> None:
+    schema = select_features.args_schema
+    validated = schema.model_validate({
+        "layer": "montreal:parcs",
+        "geometry_source": {"type": "dataset", "dataset_id": "result_001", "use_geometry": False},
+        "spatial_predicate": "within",
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.geometry_source.type == "dataset"
+    assert validated.geometry_source.dataset_id == "result_001"
