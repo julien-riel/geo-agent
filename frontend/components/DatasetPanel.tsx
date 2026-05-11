@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { DatasetMetaLite } from "@/lib/types";
 
@@ -90,10 +90,12 @@ function DatasetRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<string>(d.alias ?? "");
   const [error, setError] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   const isValidAlias = (s: string) => /^\S{1,64}$/.test(s);
 
   const submit = async () => {
+    if (submitting.current) return;
     const trimmed = draft;
     if (trimmed === (d.alias ?? "")) {
       setEditing(false);
@@ -104,13 +106,18 @@ function DatasetRow({
       setError("non vide, sans espaces, max 64 caractères");
       return;
     }
-    const err = await onRename(d.id, trimmed);
-    if (err) {
-      setError(err);
-      return;
+    submitting.current = true;
+    try {
+      const err = await onRename(d.id, trimmed);
+      if (err) {
+        setError(err);
+        return;
+      }
+      setEditing(false);
+      setError(null);
+    } finally {
+      submitting.current = false;
     }
-    setEditing(false);
-    setError(null);
   };
 
   return (
