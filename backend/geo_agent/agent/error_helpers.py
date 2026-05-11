@@ -16,6 +16,7 @@ from langchain_core.messages import ToolMessage
 from langgraph.types import Command
 
 from geo_agent.models import DatasetMetaLite, ToolError
+from geo_agent.services.result_store import ResultStore
 
 
 def tool_error_command(error: ToolError, tool_call_id: str) -> Command:
@@ -30,6 +31,19 @@ def tool_error_command(error: ToolError, tool_call_id: str) -> Command:
                 )
             ],
         }
+    )
+
+
+def dataset_not_found_command(store: ResultStore, dataset_id: str, tool_call_id: str) -> Command:
+    """Standard `dataset_not_found` error: lists the available dataset ids in the suggestion."""
+    known = [m.id for m in store.list()]
+    return tool_error_command(
+        ToolError(
+            code="dataset_not_found",
+            message=f"No dataset {dataset_id}",
+            suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
+        ),
+        tool_call_id,
     )
 
 
