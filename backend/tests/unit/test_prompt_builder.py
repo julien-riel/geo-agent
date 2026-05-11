@@ -106,3 +106,25 @@ def test_system_prompt_has_error_section() -> None:
 def test_system_prompt_recommends_describe_dataset_before_filter() -> None:
     from geo_agent.agent.prompts import SYSTEM_PROMPT
     assert "describe_dataset" in SYSTEM_PROMPT
+
+
+def test_system_prompt_has_three_tool_families() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    assert "WFS server tools" in SYSTEM_PROMPT
+    assert "Local dataset tools" in SYSTEM_PROMPT
+    assert "UI tools" in SYSTEM_PROMPT
+
+
+def test_system_prompt_mentions_new_tools() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    new_tools = (
+        "describe_wfs_layer", "spatial_overlay", "transform_geometry",
+        "spatial_join", "inspect_dataset",
+    )
+    for name in new_tools:
+        assert name in SYSTEM_PROMPT, name
+
+
+def test_system_prompt_has_empty_result_code() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+    assert "empty_result" in SYSTEM_PROMPT
