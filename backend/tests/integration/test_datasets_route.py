@@ -92,3 +92,89 @@ def test_post_drawing_increments_zone_alias(client) -> None:
 def test_post_drawing_rejects_non_polygon(client) -> None:
     r = client.post("/datasets/drawing", json={"polygon": {"type": "Point", "coordinates": [0, 0]}})
     assert r.status_code == 400
+
+
+def test_delete_all_datasets(client, tmp_path: Path) -> None:
+    _put_dataset(tmp_path)
+    _put_dataset(tmp_path)
+
+    r = client.delete("/datasets")
+
+    assert r.status_code == 200
+    assert r.json() == {"deleted": 2}
+    assert client.get("/datasets").json() == []
+
+
+def test_delete_all_datasets_on_empty_store(client) -> None:
+    r = client.delete("/datasets")
+    assert r.status_code == 200
+    assert r.json() == {"deleted": 0}
+
+
+def test_delete_dataset_by_id(client, tmp_path: Path) -> None:
+    rid_keep = _put_dataset(tmp_path)
+    rid_drop = _put_dataset(tmp_path)
+
+    r = client.delete(f"/datasets/{rid_drop}")
+
+    assert r.status_code == 200
+    assert r.json() == {"deleted": rid_drop}
+    listed = {row["id"] for row in client.get("/datasets").json()}
+    assert listed == {rid_keep}
+
+
+def test_delete_dataset_unknown_id_404(client) -> None:
+    r = client.delete("/datasets/result_999")
+    assert r.status_code == 404
+
+
+def _put_named(tmp_path: Path, alias: str | None) -> str:
+    from geo_agent.config import Settings
+    from geo_agent.services.result_store import FileSystemResultStore
+
+    s = Settings()
+    store = FileSystemResultStore(data_dir=s.DATA_DIR)
+    return store.put(
+        {"type": "FeatureCollection", "features": [{"type": "Feature", "geometry": {"type": "Point", "coordinates": [0, 0]}, "properties": {}}]},
+        {"alias": alias, "source": {"type": "wfs", "layer": "x", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select_features", "params": {}}},
+    )
+
+
+def test_patch_dataset_renames_alias(client, tmp_path: Path) -> None:
+    rid = _put_named(tmp_path, alias=None)
+
+    r = client.patch(f"/datasets/{rid}", json={"alias": "park"})
+
+    assert r.status_code == 200, r.text
+    assert r.json() == {"id": rid, "alias": "park"}
+    assert client.get(f"/datasets/{rid}/meta").json()["alias"] == "park"
+
+
+def test_patch_dataset_rejects_invalid_alias(client, tmp_path: Path) -> None:
+    rid = _put_named(tmp_path, alias=None)
+
+    r = client.patch(f"/datasets/{rid}", json={"alias": "bad name"})
+
+    assert r.status_code == 400
+
+
+def test_patch_dataset_rejects_empty_alias(client, tmp_path: Path) -> None:
+    rid = _put_named(tmp_path, alias=None)
+
+    r = client.patch(f"/datasets/{rid}", json={"alias": ""})
+
+    assert r.status_code == 400
+
+
+def test_patch_dataset_detects_collision(client, tmp_path: Path) -> None:
+    _put_named(tmp_path, alias="park")
+    rid_other = _put_named(tmp_path, alias=None)
+
+    r = client.patch(f"/datasets/{rid_other}", json={"alias": "park"})
+
+    assert r.status_code == 409
+
+
+def test_patch_dataset_unknown_id_404(client) -> None:
+    r = client.patch("/datasets/result_999", json={"alias": "park"})
+    assert r.status_code == 404
