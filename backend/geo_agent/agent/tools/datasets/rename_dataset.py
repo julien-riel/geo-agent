@@ -33,7 +33,10 @@ async def rename_dataset(
             ToolError(
                 code="bad_input",
                 message=f"Invalid alias {new_alias!r}",
-                suggestion="alias must be non-empty, contain no whitespace, and be at most 64 characters",
+                suggestion=(
+                    "alias must be non-empty, contain no whitespace, "
+                    "and be at most 64 characters"
+                ),
             ),
             tool_call_id,
         )

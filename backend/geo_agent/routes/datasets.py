@@ -99,7 +99,7 @@ def delete_one(dataset_id: str) -> dict:
     try:
         services.store.delete(dataset_id)
     except FileNotFoundError:
-        raise HTTPException(404, f"dataset {dataset_id} not found")
+        raise HTTPException(404, f"dataset {dataset_id} not found") from None
     return {"deleted": dataset_id}
 
 
@@ -119,7 +119,7 @@ def rename(dataset_id: str, payload: AliasPayload) -> dict:
     try:
         rid = services.store._resolve_id(dataset_id)
     except FileNotFoundError:
-        raise HTTPException(404, f"dataset {dataset_id} not found")
+        raise HTTPException(404, f"dataset {dataset_id} not found") from None
     for m in services.store.list():
         if m.id != rid and m.alias == new_alias:
             raise HTTPException(409, f"alias '{new_alias}' already used by {m.id}")
