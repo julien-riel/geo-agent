@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
@@ -10,7 +10,7 @@ from shapely.ops import unary_union
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.models import DatasetMetaLite, ToolError
-from geo_agent.services.ogc_filter import AttrOp, AttributeFilter, SpatialFilter
+from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
 from geo_agent.services.wfs_client import TooManyFeaturesError
 
 
@@ -36,7 +36,7 @@ class DatasetSource(BaseModel):
 
 
 GeometrySource = Annotated[
-    Union[PolygonSource, DatasetSource],
+    PolygonSource | DatasetSource,
     Field(discriminator="type"),
 ]
 

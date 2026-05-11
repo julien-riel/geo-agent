@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from geo_agent.agent.registry import Services, _services
+from geo_agent.agent.registry import Services
 from geo_agent.agent.tools.list_wfs_layers import list_wfs_layers
 from geo_agent.config import Settings
 from geo_agent.models import WFSLayer
