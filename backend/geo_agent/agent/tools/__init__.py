@@ -2,6 +2,7 @@ from geo_agent.agent.tools.datasets.aggregate import aggregate
 from geo_agent.agent.tools.datasets.describe_dataset import describe_dataset
 from geo_agent.agent.tools.datasets.filter_attributes import filter_attributes
 from geo_agent.agent.tools.datasets.list_datasets import list_datasets
+from geo_agent.agent.tools.datasets.spatial_join import spatial_join
 from geo_agent.agent.tools.datasets.spatial_overlay import spatial_overlay
 from geo_agent.agent.tools.datasets.transform_geometry import transform_geometry
 from geo_agent.agent.tools.ui.show_on_map import hide_on_map, show_on_map
@@ -19,6 +20,7 @@ ALL_TOOLS = [
     describe_dataset,
     list_datasets,
     spatial_overlay,
+    spatial_join,
     transform_geometry,
     # UI tools
     show_on_map,
@@ -33,6 +35,7 @@ __all__ = [
     "aggregate",
     "describe_dataset",
     "list_datasets",
+    "spatial_join",
     "spatial_overlay",
     "transform_geometry",
     "show_on_map",
