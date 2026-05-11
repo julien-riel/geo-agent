@@ -168,6 +168,27 @@ async def test_select_features_args_schema_rejects_unknown_geometry_source_type(
         })
 
 
+async def test_select_features_with_attribute_filter_reaches_wfs(services: Services) -> None:
+    from geo_agent.agent.tools.select_features import AttributeFilterInput, PolygonSource
+
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
+        spatial_predicate="within",
+        attribute_filter=AttributeFilterInput(property="type", op="eq", value="parc"),
+        alias="parcs_eq",
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    af_arg = services.wfs.get_features.call_args.kwargs["attribute_filter"]
+    assert af_arg is not None
+    assert af_arg.property == "type"
+    assert af_arg.op == "eq"
+    assert af_arg.value == "parc"
+
+
 async def test_select_features_args_schema_accepts_dataset_source(services: Services) -> None:
     schema = select_features.args_schema
     validated = schema.model_validate({

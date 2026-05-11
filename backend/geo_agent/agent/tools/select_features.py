@@ -10,7 +10,7 @@ from shapely.ops import unary_union
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.models import DatasetMetaLite, ToolError
-from geo_agent.services.ogc_filter import AttributeFilter, SpatialFilter
+from geo_agent.services.ogc_filter import AttrOp, AttributeFilter, SpatialFilter
 from geo_agent.services.wfs_client import TooManyFeaturesError
 
 
@@ -45,7 +45,7 @@ class AttributeFilterInput(BaseModel):
     """Server-side attribute filter for the WFS query. Uses OGC operators."""
 
     property: str = Field(description="Attribute name from the layer's schema")
-    op: Literal["eq", "neq", "lt", "gt", "lte", "gte", "like"] = Field(
+    op: AttrOp = Field(
         description=(
             "OGC server-side operator. Note: 'in' is NOT supported here — use filter_attributes "
             "for in-memory 'in' filtering. 'like' uses % as wildcard."
@@ -102,35 +102,34 @@ async def select_features(
       too_many_features, dataset_not_found, unsupported_geometry, bad_input.
     """
     services = get_services()
-    gsrc = geometry_source  # already validated by args_schema
 
-    if isinstance(gsrc, PolygonSource):
-        geom = gsrc.polygon
+    if isinstance(geometry_source, PolygonSource):
+        geom = geometry_source.polygon
         parent_ids: list[str] = []
         filter_summary = f"{spatial_predicate}(user_polygon)"
     else:
         try:
-            meta = services.store.get_meta(gsrc.dataset_id)
+            meta = services.store.get_meta(geometry_source.dataset_id)
         except FileNotFoundError:
             known = [m.id for m in services.store.list()]
             return tool_error_command(
                 ToolError(
                     code="dataset_not_found",
-                    message=f"No dataset {gsrc.dataset_id}",
+                    message=f"No dataset {geometry_source.dataset_id}",
                     suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
                 ),
                 tool_call_id,
             )
-        parent_ids = [gsrc.dataset_id]
-        if gsrc.use_geometry:
-            gj = services.store.get_geojson(gsrc.dataset_id)
+        parent_ids = [geometry_source.dataset_id]
+        if geometry_source.use_geometry:
+            gj = services.store.get_geojson(geometry_source.dataset_id)
             geom = _union_dataset_geometries(gj)
             if geom["type"] != "Polygon":
                 return tool_error_command(
                     ToolError(
                         code="unsupported_geometry",
                         message=(
-                            f"Unioned geometry of {gsrc.dataset_id} is {geom['type']}; "
+                            f"Unioned geometry of {geometry_source.dataset_id} is {geom['type']}; "
                             "only Polygon is supported as a spatial filter today."
                         ),
                         suggestion=(
@@ -140,10 +139,10 @@ async def select_features(
                     ),
                     tool_call_id,
                 )
-            filter_summary = f"{spatial_predicate}(geometry of {gsrc.dataset_id})"
+            filter_summary = f"{spatial_predicate}(geometry of {geometry_source.dataset_id})"
         else:
             geom = _bbox_polygon(meta.bbox)
-            filter_summary = f"{spatial_predicate}(bbox of {gsrc.dataset_id})"
+            filter_summary = f"{spatial_predicate}(bbox of {geometry_source.dataset_id})"
 
     schema = await services.wfs.describe_feature_type(layer)
     geom_property = schema.geom_property
