@@ -33,7 +33,9 @@ async def spatial_overlay(
     op: Literal["intersection", "union", "difference", "clip"],
     tool_call_id: Annotated[str, InjectedToolCallId],
     state: Annotated[dict, InjectedState],
-    alias: Annotated[str | None, Field(description="Short, descriptive name for the new dataset")] = None,
+    alias: Annotated[
+        str | None, Field(description="Short, descriptive name for the new dataset")
+    ] = None,
 ) -> Command:
     """Combine two datasets geometrically, producing a new dataset.
 
@@ -44,9 +46,11 @@ async def spatial_overlay(
       "difference"            — `left` minus the parts overlapping `right` (keeps left's attributes)
 
     Example — streets clipped to a zone:
-      {"left_id": "result_003", "right_id": "result_001", "op": "intersection", "alias": "rues_dans_zone"}
+      {"left_id": "result_003", "right_id": "result_001", "op": "intersection",
+       "alias": "rues_dans_zone"}
 
-    On failure: dataset_not_found (bad left_id/right_id), empty_result (left and right do not overlap).
+    On failure: dataset_not_found (bad left_id/right_id),
+    empty_result (left and right do not overlap).
     """
     services = get_services()
     try:
@@ -74,13 +78,22 @@ async def spatial_overlay(
         {
             "alias": alias,
             "source": {"type": "derived", "filter_summary": f"{op}({left_id}, {right_id})"},
-            "lineage": {"parent_ids": [left_id, right_id], "operation": "spatial_overlay", "params": {"op": op}},
+            "lineage": {
+                "parent_ids": [left_id, right_id],
+                "operation": "spatial_overlay",
+                "params": {"op": op},
+            },
         },
     )
     meta = services.store.get_meta(rid)
     return dataset_created_command(
         _meta_lite(meta),
-        tool_result={"dataset_id": rid, "alias": meta.alias, "feature_count": meta.feature_count, "bbox": list(meta.bbox)},
+        tool_result={
+            "dataset_id": rid,
+            "alias": meta.alias,
+            "feature_count": meta.feature_count,
+            "bbox": list(meta.bbox),
+        },
         state=state,
         tool_call_id=tool_call_id,
     )
