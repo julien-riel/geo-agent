@@ -45,6 +45,7 @@ async def test_select_features_with_polygon(services: Services) -> None:
     rid = new_meta_lite["id"]
     assert new_meta_lite["alias"] == "parcs_test"
     assert new_meta_lite["feature_count"] == 1
+    assert new_meta_lite["parent_ids"] == []
     meta = services.store.get_meta(rid)
     assert meta.source.layer == "montreal:parcs"
 

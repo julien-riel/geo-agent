@@ -73,6 +73,7 @@ def test_post_drawing_creates_dataset(client) -> None:
     assert body["feature_count"] == 1
     assert body["operation"] == "user_drawing"
     assert body["alias"] == "zone_1"
+    assert body["parent_ids"] == []
     minx, miny, maxx, maxy = body["bbox"]
     assert (minx, miny) == (-73.6, 45.5)
     assert (maxx, maxy) == (-73.55, 45.55)

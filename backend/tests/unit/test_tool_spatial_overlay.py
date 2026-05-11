@@ -32,6 +32,7 @@ async def test_spatial_overlay_intersection_creates_dataset_with_two_parents(ser
     meta_lite = r.update["datasets"][0]
     assert meta_lite["alias"] == "overlap"
     assert meta_lite["feature_count"] == 1
+    assert meta_lite["parent_ids"] == [left, right]
     meta = services.store.get_meta(meta_lite["id"])
     assert meta.lineage.parent_ids == [left, right]
     assert meta.lineage.operation == "spatial_overlay"

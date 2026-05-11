@@ -28,6 +28,7 @@ async def test_transform_geometry_centroid_creates_dataset(services: Services) -
     r = await transform_geometry.coroutine(dataset_id=rid, op="centroid", alias="centres", tool_call_id="t", state={"datasets": []})
     meta_lite = r.update["datasets"][0]
     assert meta_lite["alias"] == "centres"
+    assert meta_lite["parent_ids"] == [rid]
     meta = services.store.get_meta(meta_lite["id"])
     assert meta.lineage.parent_ids == [rid]
     assert meta.lineage.operation == "transform_geometry"
