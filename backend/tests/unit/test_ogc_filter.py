@@ -92,6 +92,28 @@ def test_build_filter_combined_uses_and() -> None:
     assert and_el.find("fes:PropertyIsEqualTo", NS) is not None
 
 
+def test_build_filter_like_sets_required_wildcard_attributes() -> None:
+    af = AttributeFilter(property="nomArrond", op="like", value="%Lasalle%")
+    xml = build_filter(spatial=None, attributes=af)
+    root = etree.fromstring(xml.encode("utf-8"))
+    like = root.find("fes:PropertyIsLike", NS)
+    assert like is not None
+    assert like.get("wildCard") == "%"
+    assert like.get("singleChar") == "_"
+    assert like.get("escapeChar") == "\\"
+    assert like.find("fes:ValueReference", NS).text == "nomArrond"
+    assert like.find("fes:Literal", NS).text == "%Lasalle%"
+
+
+def test_build_filter_non_like_ops_have_no_wildcard_attributes() -> None:
+    af = AttributeFilter(property="type", op="eq", value="parc")
+    xml = build_filter(spatial=None, attributes=af)
+    root = etree.fromstring(xml.encode("utf-8"))
+    eq = root.find("fes:PropertyIsEqualTo", NS)
+    assert eq is not None
+    assert eq.get("wildCard") is None
+
+
 def test_build_filter_attribute_ops() -> None:
     cases = {
         "eq": "PropertyIsEqualTo",

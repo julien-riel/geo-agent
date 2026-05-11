@@ -89,6 +89,28 @@ async def test_select_features_too_many_returns_command_with_error(services: Ser
     assert result.update["errors"][0]["code"] == "too_many_features"
 
 
+async def test_select_features_wfs_error_returns_command_not_exception(services: Services) -> None:
+    from geo_agent.services.wfs_client import WFSRequestError
+
+    services.wfs.get_features.side_effect = WFSRequestError(
+        "WFS GetFeature on montreal:arrondissements failed (HTTP 400): [OperationParsingFailed] ..."
+    )
+
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    result = await select_features.coroutine(
+        layer="montreal:arrondissements",
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
+        spatial_predicate="intersects",
+        alias=None,
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    err = result.update["errors"][0]
+    assert err["code"] == "wfs_error"
+    assert "HTTP 400" in err["message"]
+
+
 async def test_select_features_unknown_dataset_returns_command_with_suggestion(services: Services) -> None:
     result = await select_features.coroutine(
         layer="montreal:parcs",

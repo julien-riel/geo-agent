@@ -11,7 +11,7 @@ from geo_agent.agent.error_helpers import dataset_created_command, tool_error_co
 from geo_agent.agent.registry import get_services
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
-from geo_agent.services.wfs_client import TooManyFeaturesError
+from geo_agent.services.wfs_client import TooManyFeaturesError, WFSRequestError
 
 
 class PolygonSource(BaseModel):
@@ -99,7 +99,7 @@ async def select_features(
 
     Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"}.
     On failure, an error is stored in state.errors and surfaced as a ToolMessage with code:
-      too_many_features, dataset_not_found, unsupported_geometry, bad_input.
+      too_many_features, dataset_not_found, unsupported_geometry, bad_input, wfs_error.
     """
     services = get_services()
 
@@ -174,6 +174,18 @@ async def select_features(
                 code="too_many_features",
                 message=str(e),
                 suggestion="Refine the area, add an attribute_filter, or chain from a smaller dataset.",
+            ),
+            tool_call_id,
+        )
+    except WFSRequestError as e:
+        return tool_error_command(
+            ToolError(
+                code="wfs_error",
+                message=str(e),
+                suggestion=(
+                    "The WFS server rejected the query. Check the attribute name and operator "
+                    "against describe_wfs_layer, or adjust the filter. Don't retry the same call."
+                ),
             ),
             tool_call_id,
         )

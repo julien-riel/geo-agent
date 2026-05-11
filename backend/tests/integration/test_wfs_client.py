@@ -111,3 +111,33 @@ async def test_get_features_too_many_raises(tmp_path: Path) -> None:
 
     with pytest.raises(TooManyFeaturesError):
         await client.get_features(layer="x", spatial_filter=sf, attribute_filter=None, max_features=5)
+
+
+@respx.mock
+async def test_get_features_ows_exception_raises_wfs_request_error(tmp_path: Path) -> None:
+    from geo_agent.services.wfs_client import WFSRequestError
+
+    base = "https://example.test/wfs"
+    ows_report = (
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" version="2.0.0">'
+        b'<ows:Exception exceptionCode="OperationParsingFailed">'
+        b'<ows:ExceptionText>Parsing failed for PropertyIsLike</ows:ExceptionText>'
+        b'</ows:Exception></ows:ExceptionReport>'
+    )
+    respx.post(base).mock(return_value=httpx.Response(400, content=ows_report))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    sf = SpatialFilter(
+        predicate="intersects",
+        geometry={"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]},
+        geom_property="geom",
+    )
+
+    with pytest.raises(WFSRequestError) as exc_info:
+        await client.get_features(
+            layer="montreal:arrondissements", spatial_filter=sf, attribute_filter=None, max_features=100
+        )
+    msg = str(exc_info.value)
+    assert "HTTP 400" in msg
+    assert "OperationParsingFailed" in msg

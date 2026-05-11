@@ -178,6 +178,32 @@ class TooManyFeaturesError(Exception):
         self.limit = limit
 
 
+class WFSRequestError(Exception):
+    """The WFS server rejected a GetFeature request (HTTP error or OWS ExceptionReport)."""
+
+
+def _parse_ows_exception(body: bytes) -> str | None:
+    try:
+        root = etree.fromstring(body)
+    except (etree.XMLSyntaxError, ValueError):
+        return None
+    parts: list[str] = []
+    for exc in root.iter(f"{{{OWS_NS}}}Exception"):
+        code = exc.get("exceptionCode")
+        text_el = exc.find(f"{{{OWS_NS}}}ExceptionText")
+        text = " ".join((text_el.text or "").split()) if text_el is not None else ""
+        if code and text:
+            parts.append(f"[{code}] {text}")
+        elif code or text:
+            parts.append(code or text)
+    return "; ".join(parts) or None
+
+
+def _wfs_request_error(layer: str, r: httpx.Response) -> WFSRequestError:
+    detail = _parse_ows_exception(r.content) or " ".join(r.text[:300].split()) or "(no detail)"
+    return WFSRequestError(f"WFS GetFeature on {layer} failed (HTTP {r.status_code}): {detail}")
+
+
 def _build_get_feature_xml(
     layer: str,
     filter_xml: str,
@@ -210,10 +236,17 @@ async def _get_features(
 
     async with httpx.AsyncClient(timeout=self._timeout) as client:
         r = await client.post(self._base_url, content=body.encode("utf-8"), headers=headers)
-        r.raise_for_status()
-        gj = _json.loads(r.content)
 
-    features = gj.get("features", [])
+    if r.status_code >= 400:
+        raise _wfs_request_error(layer, r)
+    try:
+        gj = _json.loads(r.content)
+    except _json.JSONDecodeError:
+        raise _wfs_request_error(layer, r) from None
+    if not isinstance(gj, dict) or "features" not in gj:
+        raise _wfs_request_error(layer, r)
+
+    features = gj["features"]
     if len(features) > max_features:
         raise TooManyFeaturesError(max_features)
     return gj
