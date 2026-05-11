@@ -39,6 +39,7 @@ class DatasetMetaLite(BaseModel):
     bbox: tuple[float, float, float, float]
     layer: str | None
     operation: str
+    parent_ids: list[str] = Field(default_factory=list)
 
 
 class ToolError(BaseModel):

@@ -71,3 +71,32 @@ def test_source_info_accepts_user_drawing_type() -> None:
 
     s = SourceInfo(type="user_drawing", filter_summary="user-drawn polygon")
     assert s.type == "user_drawing"
+
+
+def test_dataset_meta_lite_has_parent_ids_default_empty() -> None:
+    from geo_agent.models import DatasetMetaLite
+
+    m = DatasetMetaLite(
+        id="result_001",
+        alias=None,
+        feature_count=1,
+        bbox=(0.0, 0.0, 1.0, 1.0),
+        layer=None,
+        operation="user_drawing",
+    )
+    assert m.parent_ids == []
+
+
+def test_dataset_meta_lite_accepts_parent_ids() -> None:
+    from geo_agent.models import DatasetMetaLite
+
+    m = DatasetMetaLite(
+        id="result_005",
+        alias="derived",
+        feature_count=3,
+        bbox=(0.0, 0.0, 1.0, 1.0),
+        layer=None,
+        operation="filter_attributes",
+        parent_ids=["result_001"],
+    )
+    assert m.parent_ids == ["result_001"]

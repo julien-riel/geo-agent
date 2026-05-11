@@ -76,4 +76,5 @@ def create_drawing(payload: DrawingPayload) -> dict:
         "bbox": list(meta.bbox),
         "layer": None,
         "operation": "user_drawing",
+        "parent_ids": [],
     }

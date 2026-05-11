@@ -46,6 +46,7 @@ async def test_filter_attributes_creates_new_dataset(services: Services, populat
     assert new_meta.lineage.parent_ids == [populated]
     assert new_meta.alias == "longues"
     assert new_meta.lineage.params == {"property": "longueur", "op": "gt", "value": 200}
+    assert new_meta_lite["parent_ids"] == [populated]
 
 
 async def test_filter_attributes_unknown_dataset_returns_command_with_error(services: Services) -> None:

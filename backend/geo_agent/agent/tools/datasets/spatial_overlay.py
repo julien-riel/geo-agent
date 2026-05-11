@@ -23,6 +23,7 @@ def _meta_lite(meta) -> DatasetMetaLite:
         bbox=meta.bbox,
         layer=meta.source.layer,
         operation=meta.lineage.operation,
+        parent_ids=meta.lineage.parent_ids,
     )
 
 
