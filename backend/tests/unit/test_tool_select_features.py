@@ -45,6 +45,7 @@ async def test_select_features_with_polygon(services: Services) -> None:
     rid = new_meta_lite["id"]
     assert new_meta_lite["alias"] == "parcs_test"
     assert new_meta_lite["feature_count"] == 1
+    assert new_meta_lite["parent_ids"] == []
     meta = services.store.get_meta(rid)
     assert meta.source.layer == "montreal:parcs"
 
@@ -209,6 +210,23 @@ async def test_select_features_with_attribute_filter_reaches_wfs(services: Servi
     assert af_arg.property == "type"
     assert af_arg.op == "eq"
     assert af_arg.value == "parc"
+
+
+async def test_select_features_distance_meters_without_dwithin_is_bad_input(services: Services) -> None:
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
+        spatial_predicate="within",
+        distance_meters=50,
+        alias=None,
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+    err = result.update["errors"][0]
+    assert err["code"] == "bad_input"
+    assert "dwithin" in err["message"]
+    services.wfs.get_features.assert_not_called()
 
 
 async def test_select_features_args_schema_accepts_dataset_source(services: Services) -> None:

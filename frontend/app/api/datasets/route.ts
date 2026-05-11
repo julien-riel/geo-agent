@@ -11,3 +11,11 @@ export async function GET(_req: NextRequest) {
     headers: { "content-type": "application/json", "cache-control": "no-store" },
   });
 }
+
+export async function DELETE(_req: NextRequest) {
+  const r = await fetch(`${BACKEND_URL}/datasets`, { method: "DELETE" });
+  return new Response(await r.text(), {
+    status: r.status,
+    headers: { "content-type": "application/json" },
+  });
+}

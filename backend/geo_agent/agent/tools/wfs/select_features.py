@@ -91,7 +91,8 @@ async def select_features(
       {"type": "dataset", "dataset_id": "zone_1_id",   "use_geometry": true}     # geometry of zone_1
 
     spatial_predicate:
-      intersects | within | contains | bbox | dwithin (requires distance_meters)
+      intersects | within | contains | bbox | dwithin
+      distance_meters is required by — and only valid with — dwithin.
 
     attribute_filter (optional, server-side):
       {"property": "type", "op": "eq", "value": "parc"}
@@ -101,6 +102,19 @@ async def select_features(
     On failure, an error is stored in state.errors and surfaced as a ToolMessage with code:
       too_many_features, dataset_not_found, unsupported_geometry, bad_input, wfs_error.
     """
+    if distance_meters is not None and spatial_predicate != "dwithin":
+        return tool_error_command(
+            ToolError(
+                code="bad_input",
+                message=(
+                    "distance_meters only applies to spatial_predicate='dwithin', "
+                    f"not '{spatial_predicate}'"
+                ),
+                suggestion="drop distance_meters, or set spatial_predicate='dwithin'",
+            ),
+            tool_call_id,
+        )
+
     services = get_services()
 
     if isinstance(geometry_source, PolygonSource):
@@ -210,6 +224,7 @@ async def select_features(
         bbox=meta.bbox,
         layer=meta.source.layer,
         operation=meta.lineage.operation,
+        parent_ids=meta.lineage.parent_ids,
     )
     return dataset_created_command(
         meta_lite,

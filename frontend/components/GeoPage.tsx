@@ -17,7 +17,7 @@ import { AgentState, DatasetMetaLite } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
-const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [] };
+const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [], inspections: [] };
 
 // Gemma sometimes emits a fenced code block with no body (```json\n```), which
 // CopilotKit's markdown renderer turns into String(undefined) === "undefined"
@@ -87,7 +87,7 @@ function GeoPageBody() {
   useEffect(() => {
     fetch("/api/datasets")
       .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((rows: Array<{ id: string; alias: string | null; feature_count: number; bbox: [number, number, number, number]; source: { layer: string | null }; lineage: { operation: string } }>) => {
+      .then((rows: Array<{ id: string; alias: string | null; feature_count: number; bbox: [number, number, number, number]; source: { layer: string | null }; lineage: { operation: string; parent_ids?: string[] } }>) => {
         setHydratedDatasets(
           rows.map((m) => ({
             id: m.id,
@@ -96,6 +96,7 @@ function GeoPageBody() {
             bbox: m.bbox,
             layer: m.source?.layer ?? null,
             operation: m.lineage?.operation ?? "unknown",
+            parent_ids: m.lineage?.parent_ids ?? [],
           }))
         );
       })
@@ -119,13 +120,19 @@ function GeoPageBody() {
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
     render: ({ state }) => {
-      const last = state?.errors?.[state.errors.length - 1];
-      if (!last) return null;
+      const lastErr = state?.errors?.[state.errors.length - 1];
+      const lastInspection = state?.inspections?.[state.inspections.length - 1];
+      if (!lastErr && !lastInspection) return null;
       return (
-        <div style={{ color: "red" }}>
-          <strong>Erreur ({last.code}) :</strong> {last.message}
-          {last.suggestion ? <div style={{ opacity: 0.8 }}>↳ {last.suggestion}</div> : null}
-        </div>
+        <>
+          {lastInspection ? <InspectDatasetWidget data={lastInspection} /> : null}
+          {lastErr ? (
+            <div style={{ color: "red" }}>
+              <strong>Erreur ({lastErr.code}) :</strong> {lastErr.message}
+              {lastErr.suggestion ? <div style={{ opacity: 0.8 }}>↳ {lastErr.suggestion}</div> : null}
+            </div>
+          ) : null}
+        </>
       );
     },
   });
@@ -194,16 +201,9 @@ function GeoPageBody() {
     },
   });
 
-  useCopilotAction({
-    name: "inspect_dataset",
-    available: "disabled",
-    render: ({ result, status }) => {
-      if (status === "executing" || !result) {
-        return <div style={{ opacity: 0.6, fontSize: 12, padding: 8 }}>Chargement de la vue…</div>;
-      }
-      return <InspectDatasetWidget data={result as never} />;
-    },
-  });
+  // inspect_dataset has no useCopilotAction render: its tool result is only a tiny summary
+  // (so a 50-row table never enters the model's context). The full payload is pushed to
+  // agent state and rendered by the useCoAgentStateRender block above.
 
   const onDraw = () => setDrawing(true);
 
@@ -235,13 +235,68 @@ function GeoPageBody() {
     setAgentState({ ...current, active_layers: next });
   };
 
-  const onNewConversation = () => {
+  const onNewConversation = async () => {
+    if (!window.confirm("Effacer la conversation et tous les datasets ?")) return;
+    try {
+      await fetch("/api/datasets", { method: "DELETE" });
+    } catch (e) {
+      console.error("clear datasets failed", e);
+    }
     resetThreadId();
-    // CopilotSidebar reads messages from a runtime context we can't reliably
-    // clear without remounting the whole CopilotKit provider tree. A page
-    // reload is the simplest reliable reset; the new threadId persists in
-    // sessionStorage, so we resume on a fresh thread on next mount.
     window.location.reload();
+  };
+
+  const onClearDatasets = async () => {
+    try {
+      const r = await fetch("/api/datasets", { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({ ...current, datasets: [], active_layers: [] });
+    } catch (e) {
+      console.error("clear datasets failed", e);
+    }
+  };
+
+  const onDeleteDataset = async (id: string) => {
+    try {
+      const r = await fetch(`/api/datasets/${id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({
+        ...current,
+        datasets: current.datasets.filter((d) => d.id !== id),
+        active_layers: current.active_layers.filter((x) => x !== id),
+      });
+    } catch (e) {
+      console.error("delete dataset failed", e);
+    }
+  };
+
+  const onRenameDataset = async (id: string, newAlias: string): Promise<string | null> => {
+    try {
+      const r = await fetch(`/api/datasets/${id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ alias: newAlias }),
+      });
+      if (!r.ok) {
+        try {
+          const payload = (await r.json()) as { detail?: string };
+          return payload.detail ?? `HTTP ${r.status}`;
+        } catch {
+          return `HTTP ${r.status}`;
+        }
+      }
+      const current = agentState ?? EMPTY_STATE;
+      setAgentState({
+        ...current,
+        datasets: current.datasets.map((d) => (d.id === id ? { ...d, alias: newAlias } : d)),
+      });
+      return null;
+    } catch (e) {
+      console.error("rename dataset failed", e);
+      return "network error";
+    }
   };
 
   return (
@@ -270,6 +325,9 @@ function GeoPageBody() {
           onToggle={onToggle}
           onDraw={onDraw}
           drawingActive={drawing}
+          onClearAll={onClearDatasets}
+          onDelete={onDeleteDataset}
+          onRename={onRenameDataset}
         />
 
         <CopilotSidebar

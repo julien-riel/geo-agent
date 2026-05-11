@@ -4,7 +4,11 @@ from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.types import Command
 from pydantic import Field
 
-from geo_agent.agent.error_helpers import dataset_not_found_command, tool_error_command
+from geo_agent.agent.error_helpers import (
+    dataset_not_found_command,
+    inspection_command,
+    tool_error_command,
+)
 from geo_agent.agent.registry import get_services
 from geo_agent.models import ToolError
 
@@ -42,8 +46,8 @@ async def inspect_dataset(
         int | None,
         Field(description="Required for view='feature': 0-based index into the dataset"),
     ] = None,
-) -> dict | Command:
-    """Surface a view of a dataset to the user in the chat (does not change the map).
+) -> Command:
+    """Render a view of a dataset to the user in the chat (does not change the map).
 
     view:
       "schema"   — attribute names, types, and a sample value from the first feature
@@ -55,7 +59,9 @@ async def inspect_dataset(
       {"dataset_id": "result_003", "view": "features"}
       {"dataset_id": "result_003", "view": "feature", "feature_index": 0}
 
-    You receive only property values and a geometry-type summary — never the coordinates.
+    The view is drawn for the user. You only get back a short confirmation (the view shown and the
+    feature counts) — NOT the table itself. If you need attribute names to plan a filter, call
+    describe_dataset instead.
 
     On failure: dataset_not_found (bad dataset_id), bad_input (feature_index out of range).
     """
@@ -69,14 +75,20 @@ async def inspect_dataset(
     features = gj.get("features", [])
 
     if view == "schema":
-        sample = (features[0].get("properties") or {}) if features else {}
-        return {
+        payload = {
             "view": "schema",
             "dataset_id": meta.id,
             "alias": meta.alias,
             "attribute_schema": meta.attribute_schema,
-            "sample": sample,
+            "sample": (features[0].get("properties") or {}) if features else {},
         }
+        summary = {
+            "shown_to_user": "schema",
+            "dataset_id": meta.id,
+            "alias": meta.alias,
+            "feature_count": len(features),
+        }
+        return inspection_command(payload, summary, tool_call_id)
 
     if view == "features":
         rows = [
@@ -87,13 +99,21 @@ async def inspect_dataset(
             }
             for i, f in enumerate(features[:FEATURE_LIST_CAP])
         ]
-        return {
+        payload = {
             "view": "features",
             "dataset_id": meta.id,
             "alias": meta.alias,
             "total": len(features),
             "features": rows,
         }
+        summary = {
+            "shown_to_user": "features",
+            "dataset_id": meta.id,
+            "alias": meta.alias,
+            "feature_count": len(features),
+            "rows_shown": len(rows),
+        }
+        return inspection_command(payload, summary, tool_call_id)
 
     # view == "feature"
     if feature_index is None or feature_index < 0 or feature_index >= len(features):
@@ -107,7 +127,7 @@ async def inspect_dataset(
             tool_call_id,
         )
     f = features[feature_index]
-    return {
+    payload = {
         "view": "feature",
         "dataset_id": meta.id,
         "alias": meta.alias,
@@ -116,3 +136,11 @@ async def inspect_dataset(
         "geometry_type": _geometry_type(f),
         "vertex_count": _vertex_count(f.get("geometry")),
     }
+    summary = {
+        "shown_to_user": "feature",
+        "dataset_id": meta.id,
+        "alias": meta.alias,
+        "feature_index": feature_index,
+        "geometry_type": _geometry_type(f),
+    }
+    return inspection_command(payload, summary, tool_call_id)

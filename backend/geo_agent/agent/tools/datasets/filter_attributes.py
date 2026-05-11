@@ -66,6 +66,7 @@ async def filter_attributes(
         bbox=meta.bbox,
         layer=meta.source.layer,
         operation=meta.lineage.operation,
+        parent_ids=meta.lineage.parent_ids,
     )
     return dataset_created_command(
         meta_lite,

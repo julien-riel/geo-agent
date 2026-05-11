@@ -31,6 +31,7 @@ async def test_spatial_join_creates_dataset_with_two_parents(services: Services)
 
     meta_lite = r.update["datasets"][0]
     assert meta_lite["alias"] == "points_zoned"
+    assert meta_lite["parent_ids"] == [pts, zones]
     meta = services.store.get_meta(meta_lite["id"])
     assert meta.lineage.parent_ids == [pts, zones]
     assert meta.lineage.operation == "spatial_join"

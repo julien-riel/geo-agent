@@ -31,31 +31,56 @@ def rid(services: Services) -> str:
     )
 
 
-async def test_inspect_schema_returns_schema_and_sample(services: Services, rid: str) -> None:
-    out = await inspect_dataset.coroutine(dataset_id=rid, view="schema", tool_call_id="t")
-    assert out["view"] == "schema"
-    assert out["dataset_id"] == rid
-    assert out["attribute_schema"] == {"nom": "string", "n": "number"}
-    assert out["sample"] == {"nom": "A", "n": 1}
+def _inspection_payload(cmd) -> dict:
+    return cmd.update["inspections"][0]
 
 
-async def test_inspect_features_returns_compact_rows_without_coordinates(services: Services, rid: str) -> None:
-    out = await inspect_dataset.coroutine(dataset_id=rid, view="features", tool_call_id="t")
-    assert out["view"] == "features"
-    assert out["total"] == 2
-    assert [f["index"] for f in out["features"]] == [0, 1]
-    assert out["features"][0]["geometry_type"] == "Point"
-    assert out["features"][1]["geometry_type"] == "LineString"
-    assert "coordinates" not in json.dumps(out)
+def _model_summary(cmd) -> dict:
+    return json.loads(cmd.update["messages"][0].content)
 
 
-async def test_inspect_feature_returns_properties_and_vertex_count(services: Services, rid: str) -> None:
-    out = await inspect_dataset.coroutine(dataset_id=rid, view="feature", feature_index=1, tool_call_id="t")
-    assert out["view"] == "feature"
-    assert out["index"] == 1
-    assert out["properties"] == {"nom": "B", "n": 2}
-    assert out["geometry_type"] == "LineString"
-    assert out["vertex_count"] == 3
+async def test_inspect_schema_pushes_payload_to_state_and_compact_summary_to_model(services: Services, rid: str) -> None:
+    cmd = await inspect_dataset.coroutine(dataset_id=rid, view="schema", tool_call_id="t")
+    payload = _inspection_payload(cmd)
+    assert payload["view"] == "schema"
+    assert payload["dataset_id"] == rid
+    assert payload["attribute_schema"] == {"nom": "string", "n": "number"}
+    assert payload["sample"] == {"nom": "A", "n": 1}
+
+    summary = _model_summary(cmd)
+    assert summary == {"shown_to_user": "schema", "dataset_id": rid, "alias": "ds", "feature_count": 2}
+    # the model must NOT receive the schema/sample table itself
+    assert "attribute_schema" not in summary
+
+
+async def test_inspect_features_payload_has_rows_without_coordinates_summary_has_counts(services: Services, rid: str) -> None:
+    cmd = await inspect_dataset.coroutine(dataset_id=rid, view="features", tool_call_id="t")
+    payload = _inspection_payload(cmd)
+    assert payload["view"] == "features"
+    assert payload["total"] == 2
+    assert [f["index"] for f in payload["features"]] == [0, 1]
+    assert payload["features"][0]["geometry_type"] == "Point"
+    assert payload["features"][1]["geometry_type"] == "LineString"
+    assert "coordinates" not in json.dumps(payload)
+
+    summary = _model_summary(cmd)
+    assert summary["shown_to_user"] == "features"
+    assert summary["feature_count"] == 2
+    assert summary["rows_shown"] == 2
+    assert "features" not in summary
+
+
+async def test_inspect_feature_payload_has_properties_and_vertex_count(services: Services, rid: str) -> None:
+    cmd = await inspect_dataset.coroutine(dataset_id=rid, view="feature", feature_index=1, tool_call_id="t")
+    payload = _inspection_payload(cmd)
+    assert payload["view"] == "feature"
+    assert payload["index"] == 1
+    assert payload["properties"] == {"nom": "B", "n": 2}
+    assert payload["geometry_type"] == "LineString"
+    assert payload["vertex_count"] == 3
+
+    summary = _model_summary(cmd)
+    assert summary == {"shown_to_user": "feature", "dataset_id": rid, "alias": "ds", "feature_index": 1, "geometry_type": "LineString"}
 
 
 async def test_inspect_feature_out_of_range_is_bad_input(services: Services, rid: str) -> None:
