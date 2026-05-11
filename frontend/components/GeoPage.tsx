@@ -10,6 +10,7 @@ import { DatasetPanel } from "@/components/DatasetPanel";
 import { DatasetLayer } from "@/components/Map/DatasetLayer";
 import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
+import { InspectDatasetWidget } from "@/components/Widgets/InspectDatasetWidget";
 import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
@@ -190,6 +191,17 @@ function GeoPageBody() {
       return (
         <MetadataWidget data={meta as never} datasetId={id} status="complete" onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
       );
+    },
+  });
+
+  useCopilotAction({
+    name: "inspect_dataset",
+    available: "disabled",
+    render: ({ result, status }) => {
+      if (status === "executing" || !result) {
+        return <div style={{ opacity: 0.6, fontSize: 12, padding: 8 }}>Chargement de la vue…</div>;
+      }
+      return <InspectDatasetWidget data={result as never} />;
     },
   });
 
