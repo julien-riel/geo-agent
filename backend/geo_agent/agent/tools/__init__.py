@@ -1,7 +1,6 @@
 from geo_agent.agent.tools.datasets.aggregate import aggregate
 from geo_agent.agent.tools.datasets.describe_dataset import describe_dataset
 from geo_agent.agent.tools.datasets.filter_attributes import filter_attributes
-from geo_agent.agent.tools.datasets.list_datasets import list_datasets
 from geo_agent.agent.tools.datasets.spatial_join import spatial_join
 from geo_agent.agent.tools.datasets.spatial_overlay import spatial_overlay
 from geo_agent.agent.tools.datasets.transform_geometry import transform_geometry
@@ -11,7 +10,10 @@ from geo_agent.agent.tools.wfs.describe_layer import describe_wfs_layer
 from geo_agent.agent.tools.wfs.list_layers import list_wfs_layers
 from geo_agent.agent.tools.wfs.select_features import select_features
 
-# Each new-tool task below appends its import + entry to ALL_TOOLS.
+# NOTE: `list_datasets` is intentionally NOT registered here. The same metadata is
+# re-injected into the system prompt on every model turn (see prompt_builder), so a
+# dedicated tool would only be a distractor for the (small, local) model. The function
+# still exists in datasets/list_datasets.py and is exercised by its own unit test.
 ALL_TOOLS = [
     # WFS server tools
     list_wfs_layers,
@@ -21,7 +23,6 @@ ALL_TOOLS = [
     filter_attributes,
     aggregate,
     describe_dataset,
-    list_datasets,
     spatial_overlay,
     spatial_join,
     transform_geometry,
@@ -39,7 +40,6 @@ __all__ = [
     "filter_attributes",
     "aggregate",
     "describe_dataset",
-    "list_datasets",
     "spatial_join",
     "spatial_overlay",
     "transform_geometry",

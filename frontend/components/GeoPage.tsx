@@ -17,7 +17,7 @@ import { AgentState, DatasetMetaLite } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
-const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [] };
+const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [], inspections: [] };
 
 // Gemma sometimes emits a fenced code block with no body (```json\n```), which
 // CopilotKit's markdown renderer turns into String(undefined) === "undefined"
@@ -119,13 +119,19 @@ function GeoPageBody() {
   useCoAgentStateRender<AgentState>({
     name: "geo-agent",
     render: ({ state }) => {
-      const last = state?.errors?.[state.errors.length - 1];
-      if (!last) return null;
+      const lastErr = state?.errors?.[state.errors.length - 1];
+      const lastInspection = state?.inspections?.[state.inspections.length - 1];
+      if (!lastErr && !lastInspection) return null;
       return (
-        <div style={{ color: "red" }}>
-          <strong>Erreur ({last.code}) :</strong> {last.message}
-          {last.suggestion ? <div style={{ opacity: 0.8 }}>↳ {last.suggestion}</div> : null}
-        </div>
+        <>
+          {lastInspection ? <InspectDatasetWidget data={lastInspection} /> : null}
+          {lastErr ? (
+            <div style={{ color: "red" }}>
+              <strong>Erreur ({lastErr.code}) :</strong> {lastErr.message}
+              {lastErr.suggestion ? <div style={{ opacity: 0.8 }}>↳ {lastErr.suggestion}</div> : null}
+            </div>
+          ) : null}
+        </>
       );
     },
   });
@@ -194,16 +200,9 @@ function GeoPageBody() {
     },
   });
 
-  useCopilotAction({
-    name: "inspect_dataset",
-    available: "disabled",
-    render: ({ result, status }) => {
-      if (status === "executing" || !result) {
-        return <div style={{ opacity: 0.6, fontSize: 12, padding: 8 }}>Chargement de la vue…</div>;
-      }
-      return <InspectDatasetWidget data={result as never} />;
-    },
-  });
+  // inspect_dataset has no useCopilotAction render: its tool result is only a tiny summary
+  // (so a 50-row table never enters the model's context). The full payload is pushed to
+  // agent state and rendered by the useCoAgentStateRender block above.
 
   const onDraw = () => setDrawing(true);
 

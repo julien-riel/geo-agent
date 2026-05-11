@@ -17,13 +17,6 @@ export const ToolError = z.object({
 });
 export type ToolError = z.infer<typeof ToolError>;
 
-export const AgentState = z.object({
-  datasets: z.array(DatasetMetaLite.passthrough()),
-  active_layers: z.array(z.string()),
-  errors: z.array(ToolError),
-});
-export type AgentState = z.infer<typeof AgentState>;
-
 export const InspectSchemaResult = z.object({
   view: z.literal("schema"),
   dataset_id: z.string(),
@@ -58,3 +51,13 @@ export const InspectFeatureResult = z.object({
 
 export const InspectResult = z.discriminatedUnion("view", [InspectSchemaResult, InspectFeaturesResult, InspectFeatureResult]);
 export type InspectResult = z.infer<typeof InspectResult>;
+
+export const AgentState = z.object({
+  datasets: z.array(DatasetMetaLite.passthrough()),
+  active_layers: z.array(z.string()),
+  errors: z.array(ToolError),
+  // Full inspect_dataset payloads pushed by the backend; the chat widget renders the one
+  // matching the inspect_dataset tool call (the model itself only gets a short summary back).
+  inspections: z.array(InspectResult).optional(),
+});
+export type AgentState = z.infer<typeof AgentState>;

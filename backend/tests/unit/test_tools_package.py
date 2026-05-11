@@ -9,7 +9,6 @@ def test_all_tools_re_exported_and_named() -> None:
         "filter_attributes",
         "aggregate",
         "describe_dataset",
-        "list_datasets",
         "spatial_join",
         "spatial_overlay",
         "transform_geometry",

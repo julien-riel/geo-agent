@@ -8,6 +8,9 @@ Tools can either:
 - return a Command produced by `dataset_created_command(...)` to register a
   newly produced dataset in AgentState.datasets so the frontend renders it
   automatically without a separate REST round-trip.
+- return a Command produced by `inspection_command(...)` to push a (potentially
+  large) inspect_dataset payload into AgentState.inspections for the frontend,
+  while feeding only a short confirmation back to the LLM.
 """
 import json
 from typing import Any
@@ -44,6 +47,21 @@ def dataset_not_found_command(store: ResultStore, dataset_id: str, tool_call_id:
             suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
         ),
         tool_call_id,
+    )
+
+
+def inspection_command(
+    payload: dict[str, Any], summary: dict[str, Any], tool_call_id: str
+) -> Command:
+    """Push a full inspect_dataset payload to state.inspections (frontend widget) and feed only
+    `summary` back to the LLM as a ToolMessage."""
+    return Command(
+        update={
+            "inspections": [payload],
+            "messages": [
+                ToolMessage(content=json.dumps(summary), tool_call_id=tool_call_id),
+            ],
+        }
     )
 
 

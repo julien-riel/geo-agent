@@ -85,6 +85,11 @@ WFS operators for `attribute_filter.op`: eq, neq, lt, gt, lte, gte, **like** (% 
   - `false` (default) → bbox of the parent dataset (fast, coarser)
   - `true` → union of all geometries (precise; only works if the union is a single Polygon)
 
+`spatial_predicate`: intersects | within | contains | bbox | dwithin. **`distance_meters` is only
+valid with `dwithin`** ("within N metres of …") — passing it with any other predicate is an error.
+For "within N m of a set of features" you can also buffer that set with `transform_geometry` and
+then use `within`/`intersects`.
+
 ## Local dataset tools (in-memory — operate on datasets you already produced)
 
 ### filter_attributes
@@ -133,14 +138,18 @@ Example — streets clipped to a zone:
 ### transform_geometry
 Transform a dataset's geometry, producing a new dataset.
 
-`op`:
-  - "buffer" → requires `distance_meters` (in metres); grows each geometry by that distance
-  - "centroid" → replaces each geometry with its centroid (Point)
-  - "simplify" → requires `tolerance` (in degrees, e.g. 0.0001)
-  - "dissolve" → merge features; with `by` (attribute name), one feature per distinct value
+`op` (each op uses exactly one extra parameter — don't pass the others):
+  - "buffer" → requires `distance_meters` (metres); grows each geometry by that distance
+  - "centroid" → no extra parameter; replaces each geometry with its centroid (Point)
+  - "simplify" → requires `tolerance_meters` (metres); smooths/decimates the geometry, e.g. 5
+  - "dissolve" → optional `by` (attribute name): one feature per distinct value; omit `by` to merge
+    everything into one feature
 
 Example — 100 m buffer around a set of points:
   {"dataset_id": "result_004", "op": "buffer", "distance_meters": 100, "alias": "rayon_100m"}
+
+Example — merge all features in a dataset into one shape:
+  {"dataset_id": "result_006", "op": "dissolve", "alias": "emprise_totale"}
 
 ### spatial_join
 Attach `right`'s attributes to each feature of `left` based on a spatial relation. Keeps `left`'s
@@ -155,11 +164,10 @@ Example — tag each street with the borough it falls in:
 
 ### describe_dataset
 Get full metadata for a dataset by id or alias: bbox, attribute_schema, lineage. Geometry is never
-returned. Use this to discover attribute names before `filter_attributes` or to refresh your memory.
-
-### list_datasets
-Lightweight list of all session datasets (id, alias, layer, count, bbox, operation). The same info
-is already injected below — use this tool only if you need to refresh after many operations.
+returned. Use this to discover attribute names before `filter_attributes`, or when the user asks
+"what columns/attributes does X have?". (The current session's datasets — id, alias, operation,
+feature count, bbox — are always listed in the block at the end of this prompt, so you never need a
+tool just to list them.)
 
 ## UI tools (surface a view to the user)
 
@@ -168,14 +176,42 @@ Toggle a dataset's visibility on the map. Call `show_on_map` after producing any
 should see. Call `hide_on_map` when the user asks to remove a layer from view (data is preserved).
 
 ### inspect_dataset
-Show the user a view of a dataset in the chat (no map change). `view`:
-  - "schema" → attribute names, types, a sample value from the first feature
+Render a view of a dataset to the user in the chat (no map change). `view`:
+  - "schema" → attribute names + types and a sample value from the first feature
   - "features" → a compact table of up to 50 features (properties only)
   - "feature" → one feature's full properties + geometry summary; requires `feature_index`
+
+The widget is drawn for the user; you only get back a short confirmation (the view shown and the
+counts), NOT the table itself. If *you* need to read attribute names to plan a filter, use
+`describe_dataset` instead.
 
 Examples:
   {"dataset_id": "result_003", "view": "schema"}
   {"dataset_id": "result_003", "view": "feature", "feature_index": 0}
+
+# Choosing the right tool — mapping common requests
+
+(`<zone>` = most recent `operation="user_drawing"` dataset; `X`, `Y` = existing datasets.)
+
+- "trouve / cherche les X dans cette zone" → `select_features`, `geometry_source` = `<zone>`
+- "garde celles/ceux qui … (longueur > 200, type = parc, type ∈ {…})" → `filter_attributes`
+  (need a `like` wildcard? → `select_features.attribute_filter` instead)
+- "garde la partie de X qui est dans Y" / "découpe X selon Y" → `spatial_overlay` op=intersection
+- "X privé de la partie qui chevauche Y" → `spatial_overlay` op=difference
+- "fusionne les couches X et Y en une seule" → `spatial_overlay` op=union
+- "pour chaque X, ajoute l'info du Y qui le contient" / "étiquette X avec Y" → `spatial_join`
+- "combien / nombre / moyenne / total / min / max" (éventuellement "par type") → `aggregate`
+- "fusionne les X en une seule forme" / "regroupe les X par <attr>" → `transform_geometry` dissolve
+- "zone tampon de N m autour de X" → `transform_geometry` op=buffer
+- "le centre / centroïde de chaque X" → `transform_geometry` op=centroid
+- "ce qui est à moins de N m de X" → buffer X then `select_features within`, OR `select_features`
+  spatial_predicate=dwithin + distance_meters=N
+- "affiche / montre X sur la carte" → `show_on_map`; "enlève / cache X" → `hide_on_map`
+- "montre-moi les données / quelques lignes / un exemple de X" → `inspect_dataset`
+- "c'est quoi les attributs / colonnes de X ?" → `describe_dataset`
+
+When in doubt between `spatial_overlay` and `spatial_join`: overlay cuts/changes the *shapes*;
+join keeps the shapes and only adds *columns*.
 
 # Error handling
 

@@ -47,6 +47,27 @@ async def test_transform_geometry_buffer_without_distance_is_bad_input(services:
     assert r.update["errors"][0]["code"] == "bad_input"
 
 
+async def test_transform_geometry_simplify_uses_tolerance_meters(services: Services) -> None:
+    rid = _put_poly(services)
+    r = await transform_geometry.coroutine(dataset_id=rid, op="simplify", tolerance_meters=10, alias=None, tool_call_id="t", state={"datasets": []})
+    meta = services.store.get_meta(r.update["datasets"][0]["id"])
+    assert meta.lineage.params == {"op": "simplify", "tolerance_meters": 10}
+
+
+async def test_transform_geometry_simplify_without_tolerance_is_bad_input(services: Services) -> None:
+    rid = _put_poly(services)
+    r = await transform_geometry.coroutine(dataset_id=rid, op="simplify", alias=None, tool_call_id="t", state={"datasets": []})
+    assert r.update["errors"][0]["code"] == "bad_input"
+
+
+async def test_transform_geometry_rejects_param_not_belonging_to_op(services: Services) -> None:
+    rid = _put_poly(services)
+    r = await transform_geometry.coroutine(dataset_id=rid, op="centroid", distance_meters=5, alias=None, tool_call_id="t", state={"datasets": []})
+    err = r.update["errors"][0]
+    assert err["code"] == "bad_input"
+    assert "distance_meters" in err["message"]
+
+
 async def test_transform_geometry_unknown_dataset_returns_error(services: Services) -> None:
     r = await transform_geometry.coroutine(dataset_id="result_999", op="centroid", alias=None, tool_call_id="t", state={"datasets": []})
     assert r.update["errors"][0]["code"] == "dataset_not_found"
