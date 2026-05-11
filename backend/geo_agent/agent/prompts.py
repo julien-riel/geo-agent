@@ -187,9 +187,8 @@ When a tool returns an error, read the `code` and `suggestion` fields and adapt:
 - `layer_not_found` → call `list_wfs_layers` to get valid layer names.
 - `unsupported_geometry` (from `use_geometry=true` returning a MultiPolygon) → retry with
   `use_geometry=false` (bbox) or chain from a single-polygon parent.
-- `empty_result` (a `spatial_overlay` / `spatial_join` produced no features) → the inputs probably
-  do not overlap; loosen the criterion, change the `op`/`predicate`, or pick different inputs.
-  Never retry the same call.
+- `empty_result` (a `spatial_overlay` produced no features) → the inputs probably do not overlap;
+  change the `op` or pick different inputs. Never retry the same call.
 - `bad_input` → fix the malformed or missing argument the suggestion points to and retry once.
 - Any other code: read the `message` and `suggestion`, adapt the call accordingly. If the suggestion
   is unclear, ask the user before retrying.
