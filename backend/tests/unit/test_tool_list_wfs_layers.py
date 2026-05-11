@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from geo_agent.agent.registry import Services
-from geo_agent.agent.tools.list_wfs_layers import list_wfs_layers
+from geo_agent.agent.tools.wfs.list_layers import list_wfs_layers
 from geo_agent.config import Settings
 from geo_agent.models import WFSLayer
 from geo_agent.services.result_store import FileSystemResultStore
@@ -19,7 +19,7 @@ def services_with_mock_wfs(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> S
         WFSLayer(name="montreal:chaussees", title="Chaussées", abstract="Routes", default_crs="EPSG:4326"),
     ]
     services = Services(settings=settings, wfs=wfs_mock, store=FileSystemResultStore(data_dir=data_dir))
-    monkeypatch.setattr("geo_agent.agent.tools.list_wfs_layers.get_services", lambda: services)
+    monkeypatch.setattr("geo_agent.agent.tools.wfs.list_layers.get_services", lambda: services)
     return services
 
 
@@ -45,7 +45,7 @@ async def test_list_wfs_layers_includes_abstract(monkeypatch: pytest.MonkeyPatch
         ),
     ]
     services = Services(settings=Settings(), wfs=wfs_mock, store=None)  # type: ignore[arg-type]
-    monkeypatch.setattr("geo_agent.agent.tools.list_wfs_layers.get_services", lambda: services)
+    monkeypatch.setattr("geo_agent.agent.tools.wfs.list_layers.get_services", lambda: services)
 
     out = await list_wfs_layers.ainvoke({})
 

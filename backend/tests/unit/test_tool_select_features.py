@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from geo_agent.agent.registry import Services
-from geo_agent.agent.tools.select_features import DatasetSource, PolygonSource, select_features
+from geo_agent.agent.tools.wfs.select_features import DatasetSource, PolygonSource, select_features
 from geo_agent.config import Settings
 from geo_agent.services.result_store import FileSystemResultStore
 from geo_agent.services.wfs_client import FeatureTypeSchema
@@ -26,7 +26,7 @@ def services(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Services:
         ],
     }
     services = Services(settings=settings, wfs=wfs_mock, store=FileSystemResultStore(data_dir=data_dir))
-    monkeypatch.setattr("geo_agent.agent.tools.select_features.get_services", lambda: services)
+    monkeypatch.setattr("geo_agent.agent.tools.wfs.select_features.get_services", lambda: services)
     return services
 
 
@@ -169,7 +169,7 @@ async def test_select_features_args_schema_rejects_unknown_geometry_source_type(
 
 
 async def test_select_features_with_attribute_filter_reaches_wfs(services: Services) -> None:
-    from geo_agent.agent.tools.select_features import AttributeFilterInput, PolygonSource
+    from geo_agent.agent.tools.wfs.select_features import AttributeFilterInput, PolygonSource
 
     polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
     await select_features.coroutine(

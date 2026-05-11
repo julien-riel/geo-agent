@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -18,7 +18,7 @@ def test_dataset_meta_minimal() -> None:
         bbox=(-73.7, 45.4, -73.5, 45.6),
         attribute_schema={"name": "string"},
         lineage=LineageInfo(parent_ids=[], operation="select_features", params={}),
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         size_bytes=1234,
     )
     assert m.id == "result_001"
@@ -34,7 +34,7 @@ def test_dataset_meta_serializes_to_json() -> None:
         bbox=(0.0, 0.0, 1.0, 1.0),
         attribute_schema={},
         lineage=LineageInfo(parent_ids=[], operation="select_features", params={}),
-        created_at=datetime(2026, 5, 9, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 9, tzinfo=UTC),
         size_bytes=10,
     )
     data = m.model_dump(mode="json")
@@ -61,7 +61,7 @@ def test_bbox_validation_rejects_invalid_tuple() -> None:
             bbox=(1.0, 2.0),  # type: ignore[arg-type]
             attribute_schema={},
             lineage=LineageInfo(parent_ids=[], operation="x", params={}),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             size_bytes=0,
         )
 

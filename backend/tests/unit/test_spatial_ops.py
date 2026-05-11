@@ -1,7 +1,6 @@
 import pytest
 
 from geo_agent.services.spatial_ops import (
-    AggregateOp,
     AttributePredicate,
     aggregate,
     filter_by_attribute,

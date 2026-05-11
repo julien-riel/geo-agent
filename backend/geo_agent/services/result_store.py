@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -97,7 +97,7 @@ class FileSystemResultStore:
             bbox=_compute_bbox(geojson),
             attribute_schema=_infer_attribute_schema(geojson),
             lineage=LineageInfo(**meta_partial["lineage"]),
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
             size_bytes=len(gj_bytes),
         )
         meta_path.write_text(meta.model_dump_json())

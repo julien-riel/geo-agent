@@ -6,25 +6,10 @@ from langgraph.prebuilt import create_react_agent
 
 from geo_agent.agent.prompt_builder import build_prompt
 from geo_agent.agent.state import AgentState
-from geo_agent.agent.tools.aggregate import aggregate
-from geo_agent.agent.tools.describe_dataset import describe_dataset
-from geo_agent.agent.tools.filter_attributes import filter_attributes
-from geo_agent.agent.tools.list_datasets import list_datasets
-from geo_agent.agent.tools.list_wfs_layers import list_wfs_layers
-from geo_agent.agent.tools.select_features import select_features
-from geo_agent.agent.tools.show_on_map import hide_on_map, show_on_map
+from geo_agent.agent.tools import ALL_TOOLS
 from geo_agent.config import Settings
 
-TOOLS = [
-    list_wfs_layers,
-    select_features,
-    aggregate,
-    filter_attributes,
-    describe_dataset,
-    list_datasets,
-    show_on_map,
-    hide_on_map,
-]
+TOOLS = ALL_TOOLS
 
 
 def _build_llm(settings: Settings) -> BaseChatModel:

@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from geo_agent.agent.registry import Services
-from geo_agent.agent.tools.filter_attributes import filter_attributes
+from geo_agent.agent.tools.datasets.filter_attributes import filter_attributes
 from geo_agent.config import Settings
 from geo_agent.services.result_store import FileSystemResultStore
 from geo_agent.services.spatial_ops import AttributePredicate
@@ -13,7 +13,7 @@ from geo_agent.services.spatial_ops import AttributePredicate
 def services(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Services:
     settings = Settings(DATA_DIR=data_dir)
     services = Services(settings=settings, wfs=None, store=FileSystemResultStore(data_dir=data_dir))  # type: ignore[arg-type]
-    monkeypatch.setattr("geo_agent.agent.tools.filter_attributes.get_services", lambda: services)
+    monkeypatch.setattr("geo_agent.agent.tools.datasets.filter_attributes.get_services", lambda: services)
     return services
 
 

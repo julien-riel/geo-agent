@@ -23,3 +23,38 @@ export const AgentState = z.object({
   errors: z.array(ToolError),
 });
 export type AgentState = z.infer<typeof AgentState>;
+
+export const InspectSchemaResult = z.object({
+  view: z.literal("schema"),
+  dataset_id: z.string(),
+  alias: z.string().nullable(),
+  attribute_schema: z.record(z.string(), z.string()),
+  sample: z.record(z.string(), z.unknown()),
+});
+
+export const InspectFeatureRow = z.object({
+  index: z.number(),
+  properties: z.record(z.string(), z.unknown()),
+  geometry_type: z.string().nullable(),
+});
+
+export const InspectFeaturesResult = z.object({
+  view: z.literal("features"),
+  dataset_id: z.string(),
+  alias: z.string().nullable(),
+  total: z.number(),
+  features: z.array(InspectFeatureRow),
+});
+
+export const InspectFeatureResult = z.object({
+  view: z.literal("feature"),
+  dataset_id: z.string(),
+  alias: z.string().nullable(),
+  index: z.number(),
+  properties: z.record(z.string(), z.unknown()),
+  geometry_type: z.string().nullable(),
+  vertex_count: z.number(),
+});
+
+export const InspectResult = z.discriminatedUnion("view", [InspectSchemaResult, InspectFeaturesResult, InspectFeatureResult]);
+export type InspectResult = z.infer<typeof InspectResult>;

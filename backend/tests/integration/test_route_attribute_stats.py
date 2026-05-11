@@ -10,6 +10,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     (tmp_path / "results").mkdir()
     (tmp_path / "sessions").mkdir()
     import importlib
+
     import geo_agent.main as main_mod
     importlib.reload(main_mod)
     with TestClient(main_mod.app) as c:

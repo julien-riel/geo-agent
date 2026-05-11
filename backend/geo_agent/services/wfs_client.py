@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -66,7 +66,7 @@ class WFSClient:
         self._mem_fetched_at: datetime | None = None
 
     def _is_fresh(self, when: datetime) -> bool:
-        return datetime.now(timezone.utc) - when < self._ttl
+        return datetime.now(UTC) - when < self._ttl
 
     async def _fetch_capabilities(self) -> bytes:
         params = {"service": "WFS", "version": "2.0.0", "request": "GetCapabilities"}
@@ -87,7 +87,7 @@ class WFSClient:
 
         layers = parse_capabilities(xml)
         self._mem_layers = layers
-        self._mem_fetched_at = datetime.now(timezone.utc)
+        self._mem_fetched_at = datetime.now(UTC)
         return layers
 
 
@@ -138,7 +138,7 @@ def parse_describe_feature_type(xml_bytes: bytes, type_name: str) -> FeatureType
     return FeatureTypeSchema(type_name=type_name, geom_property=geom_property, attribute_schema=attrs)
 
 
-async def _describe_feature_type(self: "WFSClient", type_name: str) -> FeatureTypeSchema:
+async def _describe_feature_type(self: WFSClient, type_name: str) -> FeatureTypeSchema:
     cache_path = self._cache_dir / f"describe_{type_name.replace(':', '_')}.xml"
     if cache_path.exists():
         xml = cache_path.read_bytes()
@@ -198,7 +198,7 @@ def _build_get_feature_xml(
 
 
 async def _get_features(
-    self: "WFSClient",
+    self: WFSClient,
     layer: str,
     spatial_filter: SpatialFilter | None,
     attribute_filter: AttributeFilter | None,

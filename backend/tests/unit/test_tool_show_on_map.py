@@ -4,7 +4,7 @@ import pytest
 from langgraph.types import Command
 
 from geo_agent.agent.registry import Services
-from geo_agent.agent.tools.show_on_map import hide_on_map, show_on_map
+from geo_agent.agent.tools.ui.show_on_map import hide_on_map, show_on_map
 from geo_agent.config import Settings
 from geo_agent.services.result_store import FileSystemResultStore
 
@@ -13,7 +13,7 @@ from geo_agent.services.result_store import FileSystemResultStore
 def services(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Services:
     settings = Settings(DATA_DIR=data_dir)
     services = Services(settings=settings, wfs=None, store=FileSystemResultStore(data_dir=data_dir))  # type: ignore[arg-type]
-    monkeypatch.setattr("geo_agent.agent.tools.show_on_map.get_services", lambda: services)
+    monkeypatch.setattr("geo_agent.agent.tools.ui.show_on_map.get_services", lambda: services)
     return services
 
 
