@@ -150,3 +150,18 @@ def test_build_filter_attribute_ops() -> None:
         xml = build_filter(spatial=None, attributes=AttributeFilter(property="x", op=op, value="y"))  # type: ignore[arg-type]
         root = etree.fromstring(xml.encode("utf-8"))
         assert root.find(f"fes:{tag}", NS) is not None, op
+
+
+def test_build_filter_like_emits_required_wildcard_attributes() -> None:
+    af = AttributeFilter(property="nom", op="like", value="%Baldwin%")
+    xml = build_filter(spatial=None, attributes=af)
+    root = etree.fromstring(xml.encode("utf-8"))
+    like = root.find("fes:PropertyIsLike", NS)
+    assert like is not None
+    # FES 2.0 requires wildCard / singleChar / escapeChar on PropertyIsLike
+    assert like.get("wildCard") == "%"
+    assert like.get("singleChar") == "_"
+    assert like.get("escapeChar") == "\\"
+    assert like.get("matchCase") == "false"
+    assert like.find("fes:ValueReference", NS).text == "nom"
+    assert like.find("fes:Literal", NS).text == "%Baldwin%"
