@@ -133,7 +133,7 @@ async def test_select_features_use_geometry_true_with_drawing(services: Services
     assert sf_arg.geometry["coordinates"][0][0] == [-73.6, 45.5] or tuple(sf_arg.geometry["coordinates"][0][0]) == (-73.6, 45.5)
 
 
-async def test_select_features_use_geometry_true_multipolygon_returns_command_with_error(services: Services) -> None:
+async def test_select_features_use_geometry_true_multipolygon_reaches_wfs(services: Services) -> None:
     parent_id = services.store.put(
         {
             "type": "FeatureCollection",
@@ -143,6 +143,33 @@ async def test_select_features_use_geometry_true_multipolygon_returns_command_wi
             ],
         },
         {"source": {"type": "wfs", "layer": "montreal:parcs", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select_features", "params": {}}},
+    )
+
+    result = await select_features.coroutine(
+        layer="montreal:chaussees",
+        geometry_source=DatasetSource(type="dataset", dataset_id=parent_id, use_geometry=True),
+        spatial_predicate="intersects",
+        alias="chaussees_multi",
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    assert "errors" not in result.update
+    assert result.update["datasets"][0]["alias"] == "chaussees_multi"
+    sf_arg = services.wfs.get_features.call_args.kwargs["spatial_filter"]
+    assert sf_arg.geometry["type"] == "MultiPolygon"
+    assert len(sf_arg.geometry["coordinates"]) == 2
+
+
+async def test_select_features_use_geometry_true_nonpolygonal_returns_error(services: Services) -> None:
+    parent_id = services.store.put(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]}, "properties": {}},
+            ],
+        },
+        {"source": {"type": "wfs", "layer": "montreal:rues", "filter_summary": ""}, "lineage": {"parent_ids": [], "operation": "select_features", "params": {}}},
     )
 
     result = await select_features.coroutine(

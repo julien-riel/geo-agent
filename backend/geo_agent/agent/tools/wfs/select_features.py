@@ -30,7 +30,8 @@ class DatasetSource(BaseModel):
         default=False,
         description=(
             "False (default): use the dataset's bbox as the filter polygon — fast, coarser. "
-            "True: union the dataset's geometries — precise, only works if the union is a single Polygon."
+            "True: union the dataset's geometries — precise; works when the union is a Polygon "
+            "or MultiPolygon (i.e. the dataset's features are polygonal)."
         ),
     )
 
@@ -138,17 +139,17 @@ async def select_features(
         if geometry_source.use_geometry:
             gj = services.store.get_geojson(geometry_source.dataset_id)
             geom = _union_dataset_geometries(gj)
-            if geom["type"] != "Polygon":
+            if geom["type"] not in ("Polygon", "MultiPolygon"):
                 return tool_error_command(
                     ToolError(
                         code="unsupported_geometry",
                         message=(
                             f"Unioned geometry of {geometry_source.dataset_id} is {geom['type']}; "
-                            "only Polygon is supported as a spatial filter today."
+                            "only Polygon and MultiPolygon are supported as a spatial filter."
                         ),
                         suggestion=(
                             "Use use_geometry=false (bbox) or chain from a dataset whose "
-                            "features form a single polygon."
+                            "features are polygonal."
                         ),
                     ),
                     tool_call_id,
