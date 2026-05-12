@@ -84,6 +84,27 @@ def _envelope_to_gml(bbox: list[float], srs: str = "EPSG:4326") -> etree._Elemen
     return env
 
 
+def _iter_positions(coords: Any):
+    """Yield every [x, y] position from an arbitrarily nested GeoJSON coordinates array."""
+    if coords and isinstance(coords[0], (int, float)):
+        yield coords
+    else:
+        for sub in coords:
+            yield from _iter_positions(sub)
+
+
+def _geometry_bbox(geom: dict) -> list[float]:
+    """[minx, miny, maxx, maxy] for any supported geometry (Envelope carries its own bbox)."""
+    if geom.get("type") == "Envelope":
+        return list(geom["bbox"])
+    pts = list(_iter_positions(geom["coordinates"]))
+    if not pts:
+        raise ValueError("geometry has no coordinates")
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    return [min(xs), min(ys), max(xs), max(ys)]
+
+
 def _point_to_gml(point: dict, srs: str = "EPSG:4326") -> etree._Element:
     p = etree.Element(f"{{{GML_NS}}}Point", nsmap={"gml": GML_NS})
     p.set("srsName", srs)
@@ -110,11 +131,11 @@ def _spatial_element(sf: SpatialFilter) -> etree._Element:
     el = etree.Element(f"{{{FES_NS}}}{tag}", nsmap=NSMAP)
 
     if sf.predicate == "bbox":
-        # BBOX takes ValueReference + Envelope, no inner geometry transform
+        # BBOX takes ValueReference + Envelope; derive the envelope from whatever
+        # geometry was passed (a Polygon, MultiPolygon, …) — not just an Envelope.
         valref = etree.SubElement(el, f"{{{FES_NS}}}ValueReference")
         valref.text = sf.geom_property
-        env = _envelope_to_gml(sf.geometry["bbox"])
-        el.append(env)
+        el.append(_envelope_to_gml(_geometry_bbox(sf.geometry)))
         return el
 
     valref = etree.SubElement(el, f"{{{FES_NS}}}ValueReference")

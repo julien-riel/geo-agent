@@ -96,6 +96,17 @@ def test_build_filter_bbox() -> None:
     assert env is not None
 
 
+def test_build_filter_bbox_from_polygon_geometry() -> None:
+    # select_features always passes a Polygon; the BBOX predicate must derive the envelope from it
+    sf = SpatialFilter(predicate="bbox", geometry=_polygon_geojson(), geom_property="geom")
+    xml = build_filter(spatial=sf, attributes=None)
+    root = etree.fromstring(xml.encode("utf-8"))
+    env = root.find("fes:BBOX/gml:Envelope", NS)
+    assert env is not None
+    assert env.find("gml:lowerCorner", NS).text == "-73.7 45.4"
+    assert env.find("gml:upperCorner", NS).text == "-73.5 45.6"
+
+
 def test_build_filter_dwithin_with_distance() -> None:
     sf = SpatialFilter(
         predicate="dwithin",
