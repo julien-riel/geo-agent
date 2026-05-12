@@ -13,6 +13,7 @@ import { MapView } from "@/components/Map/MapView";
 import { InspectDatasetWidget } from "@/components/Widgets/InspectDatasetWidget";
 import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
+import { pickBboxToFit } from "@/lib/mapFit";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
@@ -148,6 +149,17 @@ function GeoPageBody() {
     if (!m) return;
     m.fitBounds([[bbox[0], bbox[1]], [bbox[2], bbox[3]]], { padding: 80, maxZoom: 16 });
   };
+
+  // When a layer becomes visible (via show_on_map or a checkbox), recenter the map on it.
+  const prevActiveLayers = useRef<string[]>([]);
+  useEffect(() => {
+    const prev = prevActiveLayers.current;
+    const added = activeLayers.filter((id) => !prev.includes(id));
+    prevActiveLayers.current = activeLayers;
+    if (added.length === 0) return;
+    const bbox = pickBboxToFit(added, datasets);
+    if (bbox) onFitMap(bbox);
+  }, [activeLayers, datasets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useCopilotAction({
     name: "describe_dataset",
