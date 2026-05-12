@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     DATA_DIR: Path = Path("./data")
 
     MAX_FEATURES_PER_QUERY: int = 5000
+    # Lower cap for whole-layer queries with no geometry filter (no user zone / polygon).
+    MAX_FEATURES_UNFILTERED_QUERY: int = 1000
     MAX_FILTER_GEOMETRY_VERTICES: int = 1000
 
     @property

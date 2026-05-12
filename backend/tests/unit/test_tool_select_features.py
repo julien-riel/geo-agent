@@ -256,6 +256,56 @@ async def test_select_features_distance_meters_without_dwithin_is_bad_input(serv
     services.wfs.get_features.assert_not_called()
 
 
+async def test_select_features_no_geometry_source_whole_layer(services: Services) -> None:
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        alias="tous_les_parcs",
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    assert "errors" not in result.update
+    assert result.update["datasets"][0]["alias"] == "tous_les_parcs"
+    kwargs = services.wfs.get_features.call_args.kwargs
+    assert kwargs["spatial_filter"] is None
+    assert kwargs["max_features"] == services.settings.MAX_FEATURES_UNFILTERED_QUERY
+    # describe_feature_type is not needed when there's no spatial filter
+    services.wfs.describe_feature_type.assert_not_called()
+
+
+async def test_select_features_whole_layer_with_attribute_filter(services: Services) -> None:
+    from geo_agent.agent.tools.wfs.select_features import AttributeFilterInput
+
+    await select_features.coroutine(
+        layer="montreal:grands_parcs",
+        attribute_filter=AttributeFilterInput(property="nom", op="like", value="%Baldwin%"),
+        alias="parc_baldwin",
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+
+    kwargs = services.wfs.get_features.call_args.kwargs
+    assert kwargs["spatial_filter"] is None
+    assert kwargs["attribute_filter"].op == "like"
+    assert kwargs["attribute_filter"].value == "%Baldwin%"
+    assert kwargs["max_features"] == services.settings.MAX_FEATURES_UNFILTERED_QUERY
+
+
+async def test_select_features_geom_source_without_predicate_bad_input(services: Services) -> None:
+    polygon = {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}
+    result = await select_features.coroutine(
+        layer="montreal:parcs",
+        geometry_source=PolygonSource(type="polygon", polygon=polygon),
+        alias=None,
+        tool_call_id="t",
+        state={"datasets": []},
+    )
+    err = result.update["errors"][0]
+    assert err["code"] == "bad_input"
+    assert "spatial_predicate" in err["message"]
+    services.wfs.get_features.assert_not_called()
+
+
 async def test_select_features_args_schema_accepts_dataset_source(services: Services) -> None:
     schema = select_features.args_schema
     validated = schema.model_validate({
@@ -267,3 +317,31 @@ async def test_select_features_args_schema_accepts_dataset_source(services: Serv
     })
     assert validated.geometry_source.type == "dataset"
     assert validated.geometry_source.dataset_id == "result_001"
+
+
+async def test_select_features_args_accepts_json_string_geom(services: Services) -> None:
+    # some LLMs serialise nested-object args as a JSON string — it must still parse
+    schema = select_features.args_schema
+    validated = schema.model_validate({
+        "layer": "montreal:batiments",
+        "geometry_source": '{"type": "dataset", "dataset_id": "result_014", "use_geometry": true}',
+        "spatial_predicate": "intersects",
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.geometry_source.type == "dataset"
+    assert validated.geometry_source.dataset_id == "result_014"
+    assert validated.geometry_source.use_geometry is True
+
+
+async def test_select_features_args_accepts_json_string_attr_filter(services: Services) -> None:
+    schema = select_features.args_schema
+    validated = schema.model_validate({
+        "layer": "montreal:grands_parcs",
+        "attribute_filter": '{"property": "nom", "op": "like", "value": "%Baldwin%"}',
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.attribute_filter.property == "nom"
+    assert validated.attribute_filter.op == "like"
+    assert validated.attribute_filter.value == "%Baldwin%"

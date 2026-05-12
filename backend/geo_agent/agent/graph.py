@@ -36,10 +36,25 @@ def _build_llm(settings: Settings) -> BaseChatModel:
     )
 
 
+def _bind_tools_serial(llm: BaseChatModel):
+    """Bind the tools, disabling parallel tool-calling.
+
+    Several tools mutate session state (`datasets`, `active_layers`) by returning
+    the full new list on a non-reducer (LastValue) channel; two such tool calls in
+    one graph step collide with `InvalidUpdateError`. Forcing one tool call per
+    step avoids that — and lets the agent see each result before its next move.
+    """
+    try:
+        return llm.bind_tools(TOOLS, parallel_tool_calls=False)
+    except TypeError:
+        # Some providers' bind_tools (e.g. Ollama) don't accept parallel_tool_calls.
+        return llm.bind_tools(TOOLS)
+
+
 def build_agent(settings: Settings):
     llm = _build_llm(settings)
     return create_react_agent(
-        model=llm,
+        model=_bind_tools_serial(llm),
         tools=TOOLS,
         prompt=build_prompt,
         state_schema=AgentState,

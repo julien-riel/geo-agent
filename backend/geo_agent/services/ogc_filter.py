@@ -135,10 +135,13 @@ def _attribute_element(af: AttributeFilter) -> etree._Element:
     tag = _OP_TAG[af.op]
     el = etree.Element(f"{{{FES_NS}}}{tag}", nsmap=NSMAP)
     if af.op == "like":
-        # FES 2.0 requires these on PropertyIsLike; GeoServer rejects the request otherwise.
+        # FES 2.0 requires these on PropertyIsLike (GeoServer rejects the request
+        # otherwise); matchCase=false makes name lookups (e.g. %Baldwin%) tolerant
+        # of case differences in the data.
         el.set("wildCard", "%")
         el.set("singleChar", "_")
         el.set("escapeChar", "\\")
+        el.set("matchCase", "false")
     valref = etree.SubElement(el, f"{{{FES_NS}}}ValueReference")
     valref.text = af.property
     literal = etree.SubElement(el, f"{{{FES_NS}}}Literal")

@@ -141,3 +141,21 @@ async def test_get_features_ows_exception_raises_wfs_request_error(tmp_path: Pat
     msg = str(exc_info.value)
     assert "HTTP 400" in msg
     assert "OperationParsingFailed" in msg
+
+
+@respx.mock
+async def test_get_features_ows_report_with_200_raises_wfs_request_error(tmp_path: Path) -> None:
+    from geo_agent.services.wfs_client import WFSRequestError
+
+    base = "https://example.test/wfs"
+    ows_report = (
+        b'<?xml version="1.0"?><ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">'
+        b"<ows:Exception><ows:ExceptionText>boom</ows:ExceptionText></ows:Exception>"
+        b"</ows:ExceptionReport>"
+    )
+    respx.post(base).mock(return_value=httpx.Response(200, content=ows_report))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    with pytest.raises(WFSRequestError) as exc_info:
+        await client.get_features(layer="x", spatial_filter=None, attribute_filter=None, max_features=5)
+    assert "boom" in str(exc_info.value)
