@@ -111,3 +111,41 @@ async def test_get_features_too_many_raises(tmp_path: Path) -> None:
 
     with pytest.raises(TooManyFeaturesError):
         await client.get_features(layer="x", spatial_filter=sf, attribute_filter=None, max_features=5)
+
+
+@respx.mock
+async def test_get_features_http_error_raises_wfs_request_error(tmp_path: Path) -> None:
+    from geo_agent.services.wfs_client import WFSRequestError
+
+    base = "https://example.test/wfs"
+    ows_report = (
+        b'<?xml version="1.0"?><ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1" '
+        b'version="2.0.0"><ows:Exception exceptionCode="InvalidParameterValue">'
+        b"<ows:ExceptionText>Illegal property name: nom for feature type montreal:espaces-verts"
+        b"</ows:ExceptionText></ows:Exception></ows:ExceptionReport>"
+    )
+    respx.post(base).mock(return_value=httpx.Response(400, content=ows_report))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    with pytest.raises(WFSRequestError) as ei:
+        await client.get_features(layer="x", spatial_filter=None, attribute_filter=None, max_features=5)
+    assert ei.value.status_code == 400
+    assert "Illegal property name: nom" in ei.value.detail
+
+
+@respx.mock
+async def test_get_features_ows_report_with_200_raises_wfs_request_error(tmp_path: Path) -> None:
+    from geo_agent.services.wfs_client import WFSRequestError
+
+    base = "https://example.test/wfs"
+    ows_report = (
+        b'<?xml version="1.0"?><ows:ExceptionReport xmlns:ows="http://www.opengis.net/ows/1.1">'
+        b"<ows:Exception><ows:ExceptionText>boom</ows:ExceptionText></ows:Exception>"
+        b"</ows:ExceptionReport>"
+    )
+    respx.post(base).mock(return_value=httpx.Response(200, content=ows_report))
+
+    client = WFSClient(base_url=base, cache_dir=tmp_path)
+    with pytest.raises(WFSRequestError) as ei:
+        await client.get_features(layer="x", spatial_filter=None, attribute_filter=None, max_features=5)
+    assert "boom" in ei.value.detail
