@@ -46,14 +46,31 @@ def _coords_to_pos_list(ring: list[list[float]]) -> str:
     return " ".join(f"{c[0]} {c[1]}" for c in ring)
 
 
+def _ring_element(parent_tag: str, ring: list[list[float]]) -> etree._Element:
+    el = etree.Element(f"{{{GML_NS}}}{parent_tag}", nsmap={"gml": GML_NS})
+    linear_ring = etree.SubElement(el, f"{{{GML_NS}}}LinearRing")
+    poslist = etree.SubElement(linear_ring, f"{{{GML_NS}}}posList")
+    poslist.text = _coords_to_pos_list(ring)
+    return el
+
+
 def _polygon_to_gml(polygon: dict, srs: str = "EPSG:4326") -> etree._Element:
+    rings = polygon["coordinates"]
     p = etree.Element(f"{{{GML_NS}}}Polygon", nsmap={"gml": GML_NS})
     p.set("srsName", srs)
-    exterior = etree.SubElement(p, f"{{{GML_NS}}}exterior")
-    ring = etree.SubElement(exterior, f"{{{GML_NS}}}LinearRing")
-    poslist = etree.SubElement(ring, f"{{{GML_NS}}}posList")
-    poslist.text = _coords_to_pos_list(polygon["coordinates"][0])
+    p.append(_ring_element("exterior", rings[0]))
+    for hole in rings[1:]:
+        p.append(_ring_element("interior", hole))
     return p
+
+
+def _multipolygon_to_gml(multipolygon: dict, srs: str = "EPSG:4326") -> etree._Element:
+    ms = etree.Element(f"{{{GML_NS}}}MultiSurface", nsmap={"gml": GML_NS})
+    ms.set("srsName", srs)
+    for polygon_rings in multipolygon["coordinates"]:
+        member = etree.SubElement(ms, f"{{{GML_NS}}}surfaceMember")
+        member.append(_polygon_to_gml({"type": "Polygon", "coordinates": polygon_rings}, srs))
+    return ms
 
 
 def _envelope_to_gml(bbox: list[float], srs: str = "EPSG:4326") -> etree._Element:
@@ -79,6 +96,8 @@ def _geom_to_gml(geom: dict) -> etree._Element:
     t = geom.get("type")
     if t == "Polygon":
         return _polygon_to_gml(geom)
+    if t == "MultiPolygon":
+        return _multipolygon_to_gml(geom)
     if t == "Envelope":
         return _envelope_to_gml(geom["bbox"])
     if t == "Point":

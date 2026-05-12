@@ -83,7 +83,8 @@ WFS operators for `attribute_filter.op`: eq, neq, lt, gt, lte, gte, **like** (% 
 
 `use_geometry`:
   - `false` (default) → bbox of the parent dataset (fast, coarser)
-  - `true` → union of all geometries (precise; only works if the union is a single Polygon)
+  - `true` → union of all geometries (precise; works for polygonal datasets — the union may be a
+    Polygon or a MultiPolygon)
 
 `spatial_predicate`: intersects | within | contains | bbox | dwithin. **`distance_meters` is only
 valid with `dwithin`** ("within N metres of …") — passing it with any other predicate is an error.
@@ -240,8 +241,8 @@ When a tool returns an error, read the `code` and `suggestion` fields and adapt:
   parent dataset. Never retry the same call.
 - `dataset_not_found` → check the "Current datasets" block; the `suggestion` lists available ids.
 - `layer_not_found` → call `list_wfs_layers` to get valid layer names.
-- `unsupported_geometry` (from `use_geometry=true` returning a MultiPolygon) → retry with
-  `use_geometry=false` (bbox) or chain from a single-polygon parent.
+- `unsupported_geometry` (from `use_geometry=true` on a non-polygonal dataset — e.g. lines/points) →
+  retry with `use_geometry=false` (bbox) or chain from a polygonal parent.
 - `empty_result` (a `spatial_overlay` produced no features) → the inputs probably do not overlap;
   change the `op` or pick different inputs. Never retry the same call.
 - `bad_input` → fix the malformed or missing argument the suggestion points to and retry once.

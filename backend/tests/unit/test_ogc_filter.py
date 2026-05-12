@@ -38,6 +38,50 @@ def test_build_filter_within_predicate() -> None:
     assert root.find("fes:Within", NS) is not None
 
 
+def test_build_filter_polygon_with_hole_emits_interior_ring() -> None:
+    polygon_with_hole = {
+        "type": "Polygon",
+        "coordinates": [
+            [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]],
+            [[2, 2], [4, 2], [4, 4], [2, 4], [2, 2]],
+        ],
+    }
+    sf = SpatialFilter(predicate="intersects", geometry=polygon_with_hole, geom_property="geom")
+    xml = build_filter(spatial=sf, attributes=None)
+    root = etree.fromstring(xml.encode("utf-8"))
+    polygon = root.find("fes:Intersects/gml:Polygon", NS)
+    assert polygon is not None
+    assert polygon.find("gml:exterior", NS) is not None
+    interior = polygon.find("gml:interior", NS)
+    assert interior is not None
+    poslist = interior.find("gml:LinearRing/gml:posList", NS)
+    assert poslist is not None and poslist.text == "2 2 4 2 4 4 2 4 2 2"
+
+
+def test_build_filter_intersects_multipolygon_emits_multisurface() -> None:
+    multipolygon = {
+        "type": "MultiPolygon",
+        "coordinates": [
+            [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+            [[[5, 5], [6, 5], [6, 6], [5, 6], [5, 5]], [[5.2, 5.2], [5.4, 5.2], [5.4, 5.4], [5.2, 5.4], [5.2, 5.2]]],
+        ],
+    }
+    sf = SpatialFilter(predicate="within", geometry=multipolygon, geom_property="geom")
+    xml = build_filter(spatial=sf, attributes=None)
+    root = etree.fromstring(xml.encode("utf-8"))
+    within = root.find("fes:Within", NS)
+    assert within is not None
+    ms = within.find("gml:MultiSurface", NS)
+    assert ms is not None
+    members = ms.findall("gml:surfaceMember", NS)
+    assert len(members) == 2
+    assert members[0].find("gml:Polygon", NS) is not None
+    # second member has a hole → its Polygon carries an interior ring
+    second_polygon = members[1].find("gml:Polygon", NS)
+    assert second_polygon is not None
+    assert second_polygon.find("gml:interior", NS) is not None
+
+
 def test_build_filter_bbox() -> None:
     sf = SpatialFilter(
         predicate="bbox",
