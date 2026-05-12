@@ -85,3 +85,17 @@ async def test_filter_attributes_args_schema_accepts_in_operator() -> None:
         "state": {},
     })
     assert validated.predicate.op == "in"
+
+
+async def test_filter_attributes_args_accepts_json_string_predicate() -> None:
+    # LLMs sometimes pass nested-object args as a JSON string
+    schema = filter_attributes.args_schema
+    validated = schema.model_validate({
+        "dataset_id": "result_001",
+        "predicate": '{"property": "longueur", "op": "gt", "value": 200}',
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.predicate.property == "longueur"
+    assert validated.predicate.op == "gt"
+    assert validated.predicate.value == 200

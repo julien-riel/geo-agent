@@ -3,9 +3,11 @@ from typing import Annotated
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
+from pydantic import BeforeValidator
 
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._input_coercion import coerce_json_obj
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribute
 
@@ -13,7 +15,7 @@ from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribu
 @tool
 async def filter_attributes(
     dataset_id: str,
-    predicate: AttributePredicate,
+    predicate: Annotated[AttributePredicate, BeforeValidator(coerce_json_obj)],
     tool_call_id: Annotated[str, InjectedToolCallId],
     state: Annotated[dict, InjectedState],
     alias: str | None = None,

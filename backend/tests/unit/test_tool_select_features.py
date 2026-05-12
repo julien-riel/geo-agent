@@ -295,3 +295,31 @@ async def test_select_features_args_schema_accepts_dataset_source(services: Serv
     })
     assert validated.geometry_source.type == "dataset"
     assert validated.geometry_source.dataset_id == "result_001"
+
+
+async def test_select_features_args_accepts_json_string_geom(services: Services) -> None:
+    # some LLMs serialise nested-object args as a JSON string — it must still parse
+    schema = select_features.args_schema
+    validated = schema.model_validate({
+        "layer": "montreal:batiments",
+        "geometry_source": '{"type": "dataset", "dataset_id": "result_014", "use_geometry": true}',
+        "spatial_predicate": "intersects",
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.geometry_source.type == "dataset"
+    assert validated.geometry_source.dataset_id == "result_014"
+    assert validated.geometry_source.use_geometry is True
+
+
+async def test_select_features_args_accepts_json_string_attr_filter(services: Services) -> None:
+    schema = select_features.args_schema
+    validated = schema.model_validate({
+        "layer": "montreal:grands_parcs",
+        "attribute_filter": '{"property": "nom", "op": "like", "value": "%Baldwin%"}',
+        "tool_call_id": "t",
+        "state": {},
+    })
+    assert validated.attribute_filter.property == "nom"
+    assert validated.attribute_filter.op == "like"
+    assert validated.attribute_filter.value == "%Baldwin%"

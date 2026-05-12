@@ -3,12 +3,13 @@ from typing import Annotated, Any, Literal
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 from shapely.geometry import mapping, shape
 from shapely.ops import unary_union
 
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._input_coercion import coerce_json_obj
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
 from geo_agent.services.wfs_client import TooManyFeaturesError, WFSRequestError
@@ -39,6 +40,7 @@ class DatasetSource(BaseModel):
 GeometrySource = Annotated[
     PolygonSource | DatasetSource,
     Field(discriminator="type"),
+    BeforeValidator(coerce_json_obj),
 ]
 
 
@@ -53,6 +55,9 @@ class AttributeFilterInput(BaseModel):
         ),
     )
     value: Any = Field(description="Comparison value (string/number)")
+
+
+AttributeFilterArg = Annotated[AttributeFilterInput | None, BeforeValidator(coerce_json_obj)]
 
 
 def _bbox_polygon(bbox: tuple[float, float, float, float]) -> dict:
@@ -79,7 +84,7 @@ async def select_features(
     geometry_source: GeometrySource | None = None,
     spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"] | None = None,
     alias: Annotated[str | None, Field(description="Short human-readable name for the new dataset")] = None,
-    attribute_filter: AttributeFilterInput | None = None,
+    attribute_filter: AttributeFilterArg = None,
     distance_meters: float | None = None,
 ) -> Command:
     """Select features from a WFS layer with a server-side OGC filter.
