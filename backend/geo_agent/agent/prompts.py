@@ -34,6 +34,11 @@ and runs spatial/statistical queries.
    `feature_count` is `0`, `delete_dataset` it, then retry **once** with a broader filter — relax
    `eq` → `like` with `%…%`, widen an existing wildcard, or enlarge the search area. If the broader
    try is still empty, tell the user it wasn't found instead of guessing further.
+9. **[RECOMMENDED]** Default `spatial_predicate` to **`intersects`** for "in / within / near this
+   zone" requests — a feature that merely touches the zone (e.g. a building straddling the edge)
+   should still count. Use `within` only when the user explicitly means *fully contained*,
+   `contains` for the reverse, `dwithin` for "within N metres of …", and `bbox` only for a
+   deliberately rough, fast rectangular pass. When in doubt, `intersects`.
 
 # User-drawn zones
 
@@ -76,11 +81,11 @@ Example — whole layer, no zone, narrowed by an attribute filter:
     "alias": "parc_baldwin"
   }
 
-Example — search within a user-drawn zone:
+Example — search inside a user-drawn zone (intersects is the right default):
   {
     "layer": "montreal:chaussees",
     "geometry_source": {"type": "dataset", "dataset_id": "result_008", "use_geometry": true},
-    "spatial_predicate": "within",
+    "spatial_predicate": "intersects",
     "alias": "chaussees_zone_2"
   }
 
@@ -96,7 +101,7 @@ Example — with a server-side attribute filter (WFS operators only):
   {
     "layer": "montreal:parcs",
     "geometry_source": {"type": "dataset", "dataset_id": "result_002", "use_geometry": true},
-    "spatial_predicate": "within",
+    "spatial_predicate": "intersects",
     "attribute_filter": {"property": "type", "op": "like", "value": "parc%"},
     "alias": "parcs_dans_zone"
   }
@@ -110,13 +115,32 @@ For a name the user typed, prefer `like` with `%…%` over `eq` (see core rule 7
 
 `use_geometry`:
   - `false` (default) → bbox of the parent dataset (fast, coarser)
-  - `true` → union of all geometries (precise; works for polygonal datasets — the union may be a
-    Polygon or a MultiPolygon)
+  - `true` → union of all geometries (precise; works only for **polygonal** datasets — the union is
+    a Polygon or a MultiPolygon). On a point/line dataset this errors (`unsupported_geometry`);
+    build an intermediate polygonal layer first — see "Building a spatial filter from a result".
 
-`spatial_predicate`: intersects | within | contains | bbox | dwithin. **`distance_meters` is only
-valid with `dwithin`** ("within N metres of …") — passing it with any other predicate is an error.
-For "within N m of a set of features" you can also buffer that set with `transform_geometry` and
-then use `within`/`intersects`.
+`spatial_predicate`: intersects | within | contains | bbox | dwithin.
+  - **`intersects`** — the default; pick it unless the user asks for something more specific.
+  - **`within`** — feature fully inside the filter; **`contains`** — feature fully encloses it.
+  - **`dwithin`** — "within N metres of …"; **requires** `distance_meters` (and it is valid with no
+    other predicate). Alternatively buffer the target set and use `intersects`.
+  - **`bbox`** — matches the filter geometry's bounding rectangle only; use it for a deliberately
+    rough, fast pass, not as a substitute for `intersects`.
+
+### Building a spatial filter from a result (intermediate layers)
+`select_features.geometry_source` (with `use_geometry=true`) needs a **polygonal** dataset. When the
+geometry you want to filter by isn't a polygon yet, build it with the local tools, then point
+`geometry_source` at the new dataset:
+  - points / lines → `transform_geometry op=buffer distance_meters=N` turns each feature into a
+    polygon. Then `transform_geometry op=dissolve` (no `by`) merges them into a single
+    Polygon/MultiPolygon. Use that dataset as the `geometry_source`.
+  - several separate result polygons (e.g. all parks of a borough) → `transform_geometry`
+    `op=dissolve` into one MultiPolygon, then filter against it.
+  - want a ring around something → buffer the larger distance, buffer the smaller, then
+    `spatial_overlay op=difference` (big minus small) for the annulus, then use it as the filter.
+Example — "buildings within 100 m of the metro entrances" (a point layer):
+  buffer the metro-entrances dataset by 100 → dissolve → `select_features` on `montreal:batiments`
+  with `geometry_source` = the dissolved buffer, `use_geometry=true`, predicate `intersects`.
 
 ## Local dataset tools (in-memory — operate on datasets you already produced)
 
@@ -236,7 +260,12 @@ Examples:
 
 (`<zone>` = most recent `operation="user_drawing"` dataset; `X`, `Y` = existing datasets.)
 
-- "trouve / cherche les X dans cette zone" → `select_features`, `geometry_source` = `<zone>`
+- "trouve / cherche les X dans cette zone" → `select_features`, `geometry_source` = `<zone>`,
+  `spatial_predicate` = `intersects` (the default — see core rule 9; only use `within`/`bbox` if
+  the user explicitly asks for "entirely inside" / a rough rectangle)
+- "les X près de / autour de / le long de Y" *(Y is points or lines)* → buffer Y
+  (`transform_geometry op=buffer`), `dissolve` it into one polygon, then `select_features` on the X
+  layer with `geometry_source` = that dissolved buffer, `use_geometry=true`, `intersects`
 - "trouve / cherche / affiche les X" *(aucune zone dessinée, aucun polygone fourni)* →
   `select_features` **sans** `geometry_source` (requête couche entière, plafonnée à 1000) ; ajoute
   un `attribute_filter` si tu peux pour la resserrer
@@ -252,10 +281,13 @@ Examples:
 - "pour chaque X, ajoute l'info du Y qui le contient" / "étiquette X avec Y" → `spatial_join`
 - "combien / nombre / moyenne / total / min / max" (éventuellement "par type") → `aggregate`
 - "fusionne les X en une seule forme" / "regroupe les X par <attr>" → `transform_geometry` dissolve
+  (also the way to turn several result polygons — or buffered points/lines — into one (Multi)Polygon
+  you can hand to `select_features.geometry_source` with `use_geometry=true`)
 - "zone tampon de N m autour de X" → `transform_geometry` op=buffer
 - "le centre / centroïde de chaque X" → `transform_geometry` op=centroid
-- "ce qui est à moins de N m de X" → buffer X then `select_features within`, OR `select_features`
-  spatial_predicate=dwithin + distance_meters=N
+- "ce qui est à moins de N m de X" → `select_features` `spatial_predicate=dwithin` +
+  `distance_meters=N`, OR buffer X → dissolve → `select_features` with that as `geometry_source`
+  + `intersects` (use the buffer route when X is a layer/result rather than a single drawn shape)
 - "affiche / montre X sur la carte" → `show_on_map`; "enlève / cache X" → `hide_on_map`
 - "montre-moi les données / quelques lignes / un exemple de X" → `inspect_dataset`
 - "c'est quoi les attributs / colonnes de X ?" → `describe_dataset`
@@ -280,7 +312,9 @@ When a tool returns an error, read the `code` and `suggestion` fields and adapt:
   the layer doesn't support). Call `describe_wfs_layer` to get the exact attribute names and types,
   fix the `attribute_filter`, then try again. Never retry the same call.
 - `unsupported_geometry` (from `use_geometry=true` on a non-polygonal dataset — e.g. lines/points) →
-  retry with `use_geometry=false` (bbox) or chain from a polygonal parent.
+  either retry with `use_geometry=false` (bbox of that dataset — coarse), or build a polygonal
+  intermediate first: `transform_geometry op=buffer` then `op=dissolve`, and point `geometry_source`
+  at the result (see "Building a spatial filter from a result").
 - `empty_result` (a `spatial_overlay` produced no features) → the inputs probably do not overlap;
   change the `op` or pick different inputs. Never retry the same call.
 - A `select_features` that succeeds but returns `feature_count: 0` is *not* an error code, but the
