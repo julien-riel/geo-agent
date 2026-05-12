@@ -3,6 +3,8 @@ from geo_agent.agent.state import (
     AgentState,
     append_errors,
     build_initial_state,
+    merge_active_layers,
+    merge_datasets,
 )
 from geo_agent.models import DatasetMetaLite
 
@@ -49,3 +51,40 @@ def test_append_errors_handles_none_inputs() -> None:
     assert append_errors([], [{"code": "c", "message": "m"}]) == [{"code": "c", "message": "m"}]
     assert append_errors(None, [{"code": "c", "message": "m"}]) == [{"code": "c", "message": "m"}]  # type: ignore[arg-type]
     assert append_errors([{"code": "c", "message": "m"}], None) == [{"code": "c", "message": "m"}]  # type: ignore[arg-type]
+
+
+def _ds(i: str, alias: str = "") -> dict:
+    return {"id": i, "alias": alias or i}
+
+
+def test_merge_datasets_full_replace_single_writer() -> None:
+    # tools return the full desired list; with one write it must behave like LastValue
+    assert merge_datasets([_ds("r1")], [_ds("r1"), _ds("r2")]) == [_ds("r1"), _ds("r2")]
+
+
+def test_merge_datasets_subset_write_is_authoritative() -> None:
+    # delete: write drops r2
+    assert merge_datasets([_ds("r1"), _ds("r2")], [_ds("r1")]) == [_ds("r1")]
+    # clear: write is empty
+    assert merge_datasets([_ds("r1"), _ds("r2")], []) == []
+    # rename: same ids, new alias wins
+    assert merge_datasets([_ds("r1", "old")], [_ds("r1", "new")]) == [_ds("r1", "new")]
+
+
+def test_merge_datasets_concurrent_creates_are_unioned() -> None:
+    # two parallel select_features both started from [r1] and each added one
+    step1 = merge_datasets([_ds("r1")], [_ds("r1"), _ds("r2")])
+    out = merge_datasets(step1, [_ds("r1"), _ds("r3")])
+    assert {d["id"] for d in out} == {"r1", "r2", "r3"}
+
+
+def test_merge_datasets_handles_none_inputs() -> None:
+    assert merge_datasets(None, [_ds("r1")]) == [_ds("r1")]  # type: ignore[arg-type]
+    assert merge_datasets([_ds("r1")], None) == [_ds("r1")]  # type: ignore[arg-type]
+
+
+def test_merge_active_layers() -> None:
+    assert merge_active_layers(["a"], ["a", "b"]) == ["a", "b"]      # show b
+    assert merge_active_layers(["a", "b"], ["a"]) == ["a"]            # hide b
+    assert merge_active_layers(["a", "b"], []) == []                  # clear
+    assert merge_active_layers(None, ["a"]) == ["a"]  # type: ignore[arg-type]
