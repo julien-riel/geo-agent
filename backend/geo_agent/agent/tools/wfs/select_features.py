@@ -74,10 +74,10 @@ def _union_dataset_geometries(geojson: dict) -> dict:
 @tool
 async def select_features(
     layer: str,
-    geometry_source: GeometrySource,
-    spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"],
     tool_call_id: Annotated[str, InjectedToolCallId],
     state: Annotated[dict, InjectedState],
+    geometry_source: GeometrySource | None = None,
+    spatial_predicate: Literal["intersects", "within", "contains", "bbox", "dwithin"] | None = None,
     alias: Annotated[str | None, Field(description="Short human-readable name for the new dataset")] = None,
     attribute_filter: AttributeFilterInput | None = None,
     distance_meters: float | None = None,
@@ -86,12 +86,14 @@ async def select_features(
 
     Always returns a fresh dataset; never modifies the input.
 
-    geometry_source examples:
+    geometry_source (optional):
+      omit it entirely         → whole-layer query, capped at MAX_FEATURES_UNFILTERED_QUERY (1000)
       {"type": "polygon", "polygon": {...GeoJSON Polygon...}}                    # user drawing
       {"type": "dataset", "dataset_id": "result_003", "use_geometry": false}     # bbox of result_003
       {"type": "dataset", "dataset_id": "zone_1_id",   "use_geometry": true}     # geometry of zone_1
+      When geometry_source is given, spatial_predicate is required.
 
-    spatial_predicate:
+    spatial_predicate (required only when geometry_source is given):
       intersects | within | contains | bbox | dwithin
       distance_meters is required by — and only valid with — dwithin.
 
@@ -116,79 +118,118 @@ async def select_features(
             tool_call_id,
         )
 
+    if geometry_source is not None and spatial_predicate is None:
+        return tool_error_command(
+            ToolError(
+                code="bad_input",
+                message="spatial_predicate is required when geometry_source is provided",
+                suggestion=(
+                    "Add spatial_predicate (intersects | within | contains | bbox | dwithin), "
+                    "or omit geometry_source for a whole-layer query."
+                ),
+            ),
+            tool_call_id,
+        )
+
     services = get_services()
 
-    if isinstance(geometry_source, PolygonSource):
-        geom = geometry_source.polygon
-        parent_ids: list[str] = []
-        filter_summary = f"{spatial_predicate}(user_polygon)"
-    else:
-        try:
-            meta = services.store.get_meta(geometry_source.dataset_id)
-        except FileNotFoundError:
-            known = [m.id for m in services.store.list()]
-            return tool_error_command(
-                ToolError(
-                    code="dataset_not_found",
-                    message=f"No dataset {geometry_source.dataset_id}",
-                    suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
-                ),
-                tool_call_id,
-            )
-        parent_ids = [geometry_source.dataset_id]
-        if geometry_source.use_geometry:
-            gj = services.store.get_geojson(geometry_source.dataset_id)
-            geom = _union_dataset_geometries(gj)
-            if geom["type"] not in ("Polygon", "MultiPolygon"):
+    sf: SpatialFilter | None = None
+    parent_ids: list[str] = []
+    filter_summary = "whole layer (no geometry filter)"
+
+    if geometry_source is not None:
+        if isinstance(geometry_source, PolygonSource):
+            geom = geometry_source.polygon
+            filter_summary = f"{spatial_predicate}(user_polygon)"
+        else:
+            try:
+                meta = services.store.get_meta(geometry_source.dataset_id)
+            except FileNotFoundError:
+                known = [m.id for m in services.store.list()]
                 return tool_error_command(
                     ToolError(
-                        code="unsupported_geometry",
-                        message=(
-                            f"Unioned geometry of {geometry_source.dataset_id} is {geom['type']}; "
-                            "only Polygon and MultiPolygon are supported as a spatial filter."
-                        ),
-                        suggestion=(
-                            "Use use_geometry=false (bbox) or chain from a dataset whose "
-                            "features are polygonal."
-                        ),
+                        code="dataset_not_found",
+                        message=f"No dataset {geometry_source.dataset_id}",
+                        suggestion=f"Available IDs: {', '.join(known) if known else '(none)'}",
                     ),
                     tool_call_id,
                 )
-            filter_summary = f"{spatial_predicate}(geometry of {geometry_source.dataset_id})"
-        else:
-            geom = _bbox_polygon(meta.bbox)
-            filter_summary = f"{spatial_predicate}(bbox of {geometry_source.dataset_id})"
+            parent_ids = [geometry_source.dataset_id]
+            if geometry_source.use_geometry:
+                gj = services.store.get_geojson(geometry_source.dataset_id)
+                geom = _union_dataset_geometries(gj)
+                if geom["type"] not in ("Polygon", "MultiPolygon"):
+                    return tool_error_command(
+                        ToolError(
+                            code="unsupported_geometry",
+                            message=(
+                                f"Unioned geometry of {geometry_source.dataset_id} "
+                                f"is {geom['type']}; only Polygon and MultiPolygon are "
+                                "supported as a spatial filter."
+                            ),
+                            suggestion=(
+                                "Use use_geometry=false (bbox) or chain from a dataset whose "
+                                "features are polygonal."
+                            ),
+                        ),
+                        tool_call_id,
+                    )
+                filter_summary = f"{spatial_predicate}(geometry of {geometry_source.dataset_id})"
+            else:
+                geom = _bbox_polygon(meta.bbox)
+                filter_summary = f"{spatial_predicate}(bbox of {geometry_source.dataset_id})"
 
-    schema = await services.wfs.describe_feature_type(layer)
-    geom_property = schema.geom_property
+        schema = await services.wfs.describe_feature_type(layer)
+        geom_property = schema.geom_property
 
-    if spatial_predicate == "dwithin":
-        if distance_meters is None:
-            return tool_error_command(
-                ToolError(code="bad_input", message="dwithin requires distance_meters"),
-                tool_call_id,
+        if spatial_predicate == "dwithin":
+            if distance_meters is None:
+                return tool_error_command(
+                    ToolError(code="bad_input", message="dwithin requires distance_meters"),
+                    tool_call_id,
+                )
+            sf = SpatialFilter(
+                predicate="dwithin",
+                geometry=geom,
+                geom_property=geom_property,
+                distance_meters=distance_meters,
             )
-        sf = SpatialFilter(predicate="dwithin", geometry=geom, geom_property=geom_property, distance_meters=distance_meters)
-    else:
-        sf = SpatialFilter(predicate=spatial_predicate, geometry=geom, geom_property=geom_property)
+        else:
+            sf = SpatialFilter(
+                predicate=spatial_predicate, geometry=geom, geom_property=geom_property
+            )
 
     af: AttributeFilter | None = None
     if attribute_filter is not None:
-        af = AttributeFilter(property=attribute_filter.property, op=attribute_filter.op, value=attribute_filter.value)
+        af = AttributeFilter(
+            property=attribute_filter.property,
+            op=attribute_filter.op,
+            value=attribute_filter.value,
+        )
+
+    max_features = (
+        services.settings.MAX_FEATURES_PER_QUERY
+        if geometry_source is not None
+        else services.settings.MAX_FEATURES_UNFILTERED_QUERY
+    )
 
     try:
         gj = await services.wfs.get_features(
             layer=layer,
             spatial_filter=sf,
             attribute_filter=af,
-            max_features=services.settings.MAX_FEATURES_PER_QUERY,
+            max_features=max_features,
         )
     except TooManyFeaturesError as e:
         return tool_error_command(
             ToolError(
                 code="too_many_features",
                 message=str(e),
-                suggestion="Refine the area, add an attribute_filter, or chain from a smaller dataset.",
+                suggestion=(
+                    "Refine the area, add an attribute_filter, chain from a smaller dataset, "
+                    "or — for a whole-layer query — add a geometry_source (a drawn zone "
+                    "or a prior dataset)."
+                ),
             ),
             tool_call_id,
         )

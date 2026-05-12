@@ -204,7 +204,10 @@ async def _get_features(
     attribute_filter: AttributeFilter | None,
     max_features: int,
 ) -> dict:
-    filter_xml = build_filter(spatial=spatial_filter, attributes=attribute_filter)
+    if spatial_filter is None and attribute_filter is None:
+        filter_xml = ""  # whole-layer query, no <fes:Filter>
+    else:
+        filter_xml = build_filter(spatial=spatial_filter, attributes=attribute_filter)
     body = _build_get_feature_xml(layer, filter_xml, max_features)
     headers = {"Content-Type": "application/xml"}
 
