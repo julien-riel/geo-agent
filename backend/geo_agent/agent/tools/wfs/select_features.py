@@ -11,7 +11,7 @@ from geo_agent.agent.error_helpers import dataset_created_command, tool_error_co
 from geo_agent.agent.registry import get_services
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
-from geo_agent.services.wfs_client import TooManyFeaturesError
+from geo_agent.services.wfs_client import TooManyFeaturesError, WFSRequestError
 
 
 class PolygonSource(BaseModel):
@@ -229,6 +229,20 @@ async def select_features(
                     "Refine the area, add an attribute_filter, chain from a smaller dataset, "
                     "or — for a whole-layer query — add a geometry_source (a drawn zone "
                     "or a prior dataset)."
+                ),
+            ),
+            tool_call_id,
+        )
+    except WFSRequestError as e:
+        return tool_error_command(
+            ToolError(
+                code="wfs_request_rejected",
+                message=str(e),
+                suggestion=(
+                    "The WFS server rejected the query. Most often this means a bad "
+                    "attribute name or an operator/value the layer doesn't support — call "
+                    "describe_wfs_layer to check the exact attribute names and types, then "
+                    "fix the attribute_filter. Do not retry the same call."
                 ),
             ),
             tool_call_id,

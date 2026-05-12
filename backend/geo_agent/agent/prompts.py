@@ -276,6 +276,9 @@ When a tool returns an error, read the `code` and `suggestion` fields and adapt:
   or pick a narrower scope. Never retry the same call.
 - `dataset_not_found` → check the "Current datasets" block; the `suggestion` lists available ids.
 - `layer_not_found` → call `list_wfs_layers` to get valid layer names.
+- `wfs_request_rejected` → the WFS server refused the query (usually a bad attribute name or an
+  operator/value the layer doesn't support). Call `describe_wfs_layer` to get the exact attribute
+  names and types, fix the `attribute_filter`, then try again. Never retry the same call.
 - `unsupported_geometry` (from `use_geometry=true` on a non-polygonal dataset — e.g. lines/points) →
   retry with `use_geometry=false` (bbox) or chain from a polygonal parent.
 - `empty_result` (a `spatial_overlay` produced no features) → the inputs probably do not overlap;

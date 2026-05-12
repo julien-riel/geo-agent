@@ -178,6 +178,33 @@ class TooManyFeaturesError(Exception):
         self.limit = limit
 
 
+class WFSRequestError(Exception):
+    """The WFS server rejected the GetFeature request (HTTP 4xx/5xx)."""
+
+    def __init__(self, status_code: int, detail: str, request_body: str):
+        super().__init__(f"WFS GetFeature rejected (HTTP {status_code}): {detail}")
+        self.status_code = status_code
+        self.detail = detail
+        self.request_body = request_body
+
+
+def _ows_exception_text(body: bytes | str) -> str:
+    """Extract the human-readable message from an OWS ExceptionReport, if present."""
+    try:
+        root = etree.fromstring(body.encode() if isinstance(body, str) else body)
+    except etree.XMLSyntaxError:
+        text = body.decode(errors="replace") if isinstance(body, bytes) else body
+        return text.strip()[:500]
+    texts = [
+        (el.text or "").strip()
+        for el in root.iter(f"{{{OWS_NS}}}ExceptionText")
+        if (el.text or "").strip()
+    ]
+    if texts:
+        return " ".join(texts)[:500]
+    return etree.tostring(root).decode(errors="replace").strip()[:500]
+
+
 def _build_get_feature_xml(
     layer: str,
     filter_xml: str,
@@ -213,8 +240,13 @@ async def _get_features(
 
     async with httpx.AsyncClient(timeout=self._timeout) as client:
         r = await client.post(self._base_url, content=body.encode("utf-8"), headers=headers)
-        r.raise_for_status()
-        gj = _json.loads(r.content)
+        if r.status_code >= 400:
+            raise WFSRequestError(r.status_code, _ows_exception_text(r.content), body)
+        try:
+            gj = _json.loads(r.content)
+        except _json.JSONDecodeError:
+            # GeoServer can answer 200 with an OWS ExceptionReport (XML) body
+            raise WFSRequestError(r.status_code, _ows_exception_text(r.content), body) from None
 
     features = gj.get("features", [])
     if len(features) > max_features:
