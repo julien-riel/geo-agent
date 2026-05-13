@@ -57,17 +57,6 @@ function MarkdownCode({
 }
 const markdownTagRenderers = { code: MarkdownCode };
 
-function findDatasetByToolResult(
-  datasets: ReadonlyArray<{ id: string; tool_call_id?: string | null }>,
-  result: unknown,
-): { id: string } | null {
-  if (!result || typeof result !== "object") return null;
-  const r = result as { dataset_id?: string; id?: string };
-  const targetId = r.dataset_id ?? r.id;
-  if (!targetId) return null;
-  return datasets.find((d) => d.id === targetId) ?? null;
-}
-
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
 
@@ -190,30 +179,21 @@ function GeoPageBody() {
     if (bbox) onFitMap(bbox);
   }, [activeLayers, datasets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const renderDatasetResult = (name: string) =>
+  // Render fires the moment a tool result lands. We cannot depend on agentState.datasets
+  // being up-to-date at that instant — the state delta may arrive after the render call.
+  // Instead we pull dataset_id (or id, for describe_dataset) straight from the tool result
+  // and let MetadataWidget hydrate the full meta via REST (/api/datasets/{id}/meta).
+  const renderDatasetResult =
+    () =>
     ({ result, status }: { result: unknown; status: string }) => {
-      if (status === "executing" || !result) return <></>;
-      const ds = findDatasetByToolResult(agentState?.datasets ?? [], result);
-      // describe_dataset returns the full meta as result; if it's not in state.datasets
-      // (because the tool doesn't create a new dataset, it inspects an existing one),
-      // render the payload directly.
-      if (!ds && name === "describe_dataset") {
-        const r = result as { id?: string };
-        if (!r.id) return <></>;
-        return (
-          <MetadataWidget
-            data={result as never}
-            datasetId={r.id}
-            onShowOnMap={onShowOnMap}
-            onFitMap={onFitMap}
-          />
-        );
-      }
-      if (!ds) return <></>;
+      if (status === "executing" || !result || typeof result !== "object") return <></>;
+      const r = result as { dataset_id?: string; id?: string };
+      const targetId = r.dataset_id ?? r.id;
+      if (!targetId) return <></>;
       return (
         <MetadataWidget
-          data={ds as never}
-          datasetId={ds.id}
+          data={undefined}
+          datasetId={targetId}
           onShowOnMap={onShowOnMap}
           onFitMap={onFitMap}
         />
@@ -221,12 +201,12 @@ function GeoPageBody() {
     };
 
   // aggregate is omitted — it returns {value, groups}, not a dataset.
-  useCopilotAction({ name: "describe_dataset",   available: "disabled", render: renderDatasetResult("describe_dataset") });
-  useCopilotAction({ name: "select_features",    available: "disabled", render: renderDatasetResult("select_features") });
-  useCopilotAction({ name: "filter_attributes",  available: "disabled", render: renderDatasetResult("filter_attributes") });
-  useCopilotAction({ name: "spatial_overlay",    available: "disabled", render: renderDatasetResult("spatial_overlay") });
-  useCopilotAction({ name: "spatial_join",       available: "disabled", render: renderDatasetResult("spatial_join") });
-  useCopilotAction({ name: "transform_geometry", available: "disabled", render: renderDatasetResult("transform_geometry") });
+  useCopilotAction({ name: "describe_dataset",   available: "disabled", render: renderDatasetResult() });
+  useCopilotAction({ name: "select_features",    available: "disabled", render: renderDatasetResult() });
+  useCopilotAction({ name: "filter_attributes",  available: "disabled", render: renderDatasetResult() });
+  useCopilotAction({ name: "spatial_overlay",    available: "disabled", render: renderDatasetResult() });
+  useCopilotAction({ name: "spatial_join",       available: "disabled", render: renderDatasetResult() });
+  useCopilotAction({ name: "transform_geometry", available: "disabled", render: renderDatasetResult() });
 
   // inspect_dataset has no useCopilotAction render: its tool result is only a tiny summary
   // (so a 50-row table never enters the model's context). The full payload is pushed to
