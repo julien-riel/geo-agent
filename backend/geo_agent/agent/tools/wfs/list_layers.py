@@ -1,6 +1,5 @@
-from langchain_core.tools import tool
-
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 
 
 @tool

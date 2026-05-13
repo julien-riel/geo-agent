@@ -3,12 +3,13 @@ import re
 from typing import Annotated
 
 from langchain_core.messages import ToolMessage
-from langchain_core.tools import InjectedToolCallId, tool
+from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 
 from geo_agent.agent.error_helpers import dataset_not_found_command, tool_error_command
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 from geo_agent.models import ToolError
 
 _ALIAS_RE = re.compile(r"^\S{1,64}$")
