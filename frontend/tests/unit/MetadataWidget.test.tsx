@@ -27,7 +27,7 @@ const META = {
 
 describe("MetadataWidget", () => {
   it("renders id, alias and the three stat tiles", () => {
-    render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
+    render(<MetadataWidget data={META} datasetId="result_002" />);
     // Alias appears in both the header and the breadcrumb terminus.
     expect(screen.getAllByText("routes_in_zone_1").length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText("result_002")).toBeInTheDocument(); // id only in header (terminus shows alias, not id)
@@ -37,14 +37,14 @@ describe("MetadataWidget", () => {
   });
 
   it("renders the breadcrumb terminus with the dataset alias", () => {
-    render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
+    render(<MetadataWidget data={META} datasetId="result_002" />);
     // Both header and breadcrumb terminus render the alias — at least 2 occurrences.
     const matches = screen.getAllByText("routes_in_zone_1");
     expect(matches.length).toBeGreaterThanOrEqual(2);
   });
 
   it("renders the lineage breadcrumb", () => {
-    render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
+    render(<MetadataWidget data={META} datasetId="result_002" />);
     expect(screen.getByText("zone_1")).toBeInTheDocument();
     expect(screen.getByText("select_features")).toBeInTheDocument();
   });
@@ -55,7 +55,6 @@ describe("MetadataWidget", () => {
       <MetadataWidget
         data={META}
         datasetId="result_002"
-        status="complete"
         onShowOnMap={onShowOnMap}
       />
     );
@@ -64,15 +63,16 @@ describe("MetadataWidget", () => {
   });
 
   it("toggles to schema mode when 'Voir le schéma' is clicked", () => {
-    render(<MetadataWidget data={META} datasetId="result_002" status="complete" />);
+    render(<MetadataWidget data={META} datasetId="result_002" />);
     fireEvent.click(screen.getByRole("button", { name: /Voir le schéma/i }));
     // Schema mode shows the attribute names
     expect(screen.getByText("id_chaussee")).toBeInTheDocument();
     expect(screen.getByText("nom_voie")).toBeInTheDocument();
   });
 
-  it("renders a skeleton when status is executing", () => {
-    render(<MetadataWidget data={META} datasetId="result_002" status="executing" />);
-    expect(screen.getByTestId("metadata-skeleton")).toBeInTheDocument();
+  it("renders null when meta is null and no datasetId to hydrate", () => {
+    const { container } = render(<MetadataWidget data={undefined} datasetId="" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/Chargement/i)).toBeNull();
   });
 });

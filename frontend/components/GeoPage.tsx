@@ -167,13 +167,12 @@ function GeoPageBody() {
     available: "disabled",
     render: ({ args, result, status }) => {
       if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""} status="executing" />;
+        return <MetadataWidget data={result as never} datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""} />;
       }
       return (
         <MetadataWidget
           data={result as never}
           datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""}
-          status="complete"
           onShowOnMap={onShowOnMap}
           onFitMap={onFitMap}
         />
@@ -186,13 +185,13 @@ function GeoPageBody() {
     available: "disabled",
     render: ({ result, status }) => {
       if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId="" status="executing" />;
+        return <MetadataWidget data={result as never} datasetId="" />;
       }
       const r = result as { dataset_id?: string; meta?: unknown };
       const meta = r.meta ?? r;
       const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
       return (
-        <MetadataWidget data={meta as never} datasetId={id} status="complete" onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
+        <MetadataWidget data={meta as never} datasetId={id} onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
       );
     },
   });
@@ -202,13 +201,13 @@ function GeoPageBody() {
     available: "disabled",
     render: ({ result, status }) => {
       if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId="" status="executing" />;
+        return <MetadataWidget data={result as never} datasetId="" />;
       }
       const r = result as { dataset_id?: string; meta?: unknown };
       const meta = r.meta ?? r;
       const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
       return (
-        <MetadataWidget data={meta as never} datasetId={id} status="complete" onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
+        <MetadataWidget data={meta as never} datasetId={id} onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
       );
     },
   });
