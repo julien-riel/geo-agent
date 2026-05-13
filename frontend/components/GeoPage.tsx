@@ -144,9 +144,22 @@ function GeoPageBody() {
         <>
           {lastInspection ? <InspectDatasetWidget data={lastInspection} /> : null}
           {lastErr ? (
-            <div style={{ color: "red" }}>
-              <strong>Erreur ({lastErr.code}) :</strong> {lastErr.message}
-              {lastErr.suggestion ? <div style={{ opacity: 0.8 }}>↳ {lastErr.suggestion}</div> : null}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                background: "#fef2f2",
+                color: "#b91c1c",
+                border: "1px solid #fecaca",
+                borderRadius: 4,
+                padding: "4px 8px",
+                fontSize: 12,
+              }}
+            >
+              <span>⚠️</span>
+              <strong style={{ fontFamily: "monospace" }}>{lastErr.code}</strong>
+              <span style={{ opacity: 0.8 }}>{lastErr.message}</span>
             </div>
           ) : null}
         </>
