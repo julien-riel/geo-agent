@@ -88,3 +88,49 @@ def test_merge_active_layers() -> None:
     assert merge_active_layers(["a", "b"], ["a"]) == ["a"]            # hide b
     assert merge_active_layers(["a", "b"], []) == []                  # clear
     assert merge_active_layers(None, ["a"]) == ["a"]  # type: ignore[arg-type]
+
+
+from geo_agent.agent.state import TOOL_EVENTS_CAP, append_tool_events
+
+
+def _ev(eid: str, status: str = "running", **kw) -> dict:
+    return {"id": eid, "status": status, **kw}
+
+
+def test_append_tool_events_appends_distinct() -> None:
+    out = append_tool_events([_ev("te_1")], [_ev("te_2")])
+    assert [e["id"] for e in out] == ["te_1", "te_2"]
+
+
+def test_append_tool_events_overwrites_same_id() -> None:
+    # start (running) → end (ok) on the same id collapses to a single entry
+    out = append_tool_events(
+        [_ev("te_1", "running", tool="select_features")],
+        [_ev("te_1", "ok", tool="select_features", duration_ms=1200)],
+    )
+    assert len(out) == 1
+    assert out[0]["status"] == "ok"
+    assert out[0]["duration_ms"] == 1200
+
+
+def test_append_tool_events_preserves_chronological_order_on_overwrite() -> None:
+    # te_1 started first, te_2 second; when te_1 finishes it should keep its position
+    state = append_tool_events([], [_ev("te_1", "running")])
+    state = append_tool_events(state, [_ev("te_2", "running")])
+    state = append_tool_events(state, [_ev("te_1", "ok")])
+    assert [e["id"] for e in state] == ["te_1", "te_2"]
+    assert state[0]["status"] == "ok"
+
+
+def test_append_tool_events_caps_distinct_ids() -> None:
+    left = [_ev(f"te_{i}") for i in range(TOOL_EVENTS_CAP)]
+    right = [_ev("te_new")]
+    out = append_tool_events(left, right)
+    assert len(out) == TOOL_EVENTS_CAP
+    assert out[-1]["id"] == "te_new"
+    assert out[0]["id"] == "te_1"  # te_0 dropped
+
+
+def test_append_tool_events_handles_none() -> None:
+    assert append_tool_events(None, [_ev("te_1")]) == [_ev("te_1")]  # type: ignore[arg-type]
+    assert append_tool_events([_ev("te_1")], None) == [_ev("te_1")]  # type: ignore[arg-type]
