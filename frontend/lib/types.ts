@@ -8,6 +8,7 @@ export const DatasetMetaLite = z.object({
   layer: z.string().nullable(),
   operation: z.string(),
   parent_ids: z.array(z.string()).default([]),
+  tool_call_id: z.string().nullable().optional(),
 });
 export type DatasetMetaLite = z.infer<typeof DatasetMetaLite>;
 
@@ -17,6 +18,26 @@ export const ToolError = z.object({
   suggestion: z.string().nullable().optional(),
 });
 export type ToolError = z.infer<typeof ToolError>;
+
+export const ToolEvent = z.object({
+  id: z.string(),
+  tool_call_id: z.string(),
+  tool: z.string(),
+  args_summary: z.string(),
+  args_raw: z.record(z.string(), z.unknown()),
+  started_at: z.number(),
+  ended_at: z.number().nullable(),
+  duration_ms: z.number().nullable(),
+  status: z.enum(["running", "ok", "error"]),
+  result_summary: z.string().optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+    })
+    .optional(),
+});
+export type ToolEvent = z.infer<typeof ToolEvent>;
 
 export const InspectSchemaResult = z.object({
   view: z.literal("schema"),
@@ -57,8 +78,7 @@ export const AgentState = z.object({
   datasets: z.array(DatasetMetaLite.passthrough()),
   active_layers: z.array(z.string()),
   errors: z.array(ToolError),
-  // Full inspect_dataset payloads pushed by the backend; the chat widget renders the one
-  // matching the inspect_dataset tool call (the model itself only gets a short summary back).
   inspections: z.array(InspectResult).optional(),
+  tool_events: z.array(ToolEvent).default([]),
 });
 export type AgentState = z.infer<typeof AgentState>;

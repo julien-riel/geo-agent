@@ -18,7 +18,7 @@ import { AgentState, DatasetMetaLite } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
-const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [], inspections: [] };
+const EMPTY_STATE: AgentState = { datasets: [], active_layers: [], errors: [], inspections: [], tool_events: [] };
 
 // Gemma sometimes emits a fenced code block with no body (```json\n```), which
 // CopilotKit's markdown renderer turns into String(undefined) === "undefined"
