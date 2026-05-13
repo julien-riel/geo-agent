@@ -145,7 +145,6 @@ async def transform_geometry(
             "dataset_id": rid,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
         },
         state=state,
         tool_call_id=tool_call_id,

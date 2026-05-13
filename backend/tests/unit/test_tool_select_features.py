@@ -49,6 +49,14 @@ async def test_select_features_with_polygon(services: Services) -> None:
     meta = services.store.get_meta(rid)
     assert meta.source.layer == "montreal:parcs"
 
+    # The ToolMessage payload sent back to the model is intentionally minimal —
+    # bbox and attribute_schema are visible to the user via the DATASET widget
+    # and re-fetchable by the model via describe_dataset if needed.
+    import json
+    tm = result.update["messages"][0]
+    payload = json.loads(tm.content)
+    assert set(payload.keys()) == {"dataset_id", "alias", "feature_count"}
+
 
 async def test_select_features_chains_from_dataset_using_bbox(services: Services) -> None:
     rid = services.store.put(

@@ -77,7 +77,6 @@ async def filter_attributes(
             "dataset_id": new_id,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
         },
         state=state,
         tool_call_id=tool_call_id,

@@ -107,7 +107,7 @@ async def select_features(
       {"property": "type", "op": "eq", "value": "parc"}
       Operators: eq, neq, lt, gt, lte, gte, like (NO 'in' — use filter_attributes for that).
 
-    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"}.
+    Returns: {"dataset_id", "alias", "feature_count"}.
     On failure, an error is stored in state.errors and surfaced as a ToolMessage with code:
       too_many_features, dataset_not_found, unsupported_geometry, bad_input, wfs_error.
     """
@@ -282,8 +282,6 @@ async def select_features(
             "dataset_id": rid,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
-            "attribute_schema": meta.attribute_schema,
         },
         state=state,
         tool_call_id=tool_call_id,
