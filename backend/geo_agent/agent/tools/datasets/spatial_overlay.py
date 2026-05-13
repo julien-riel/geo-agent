@@ -1,6 +1,6 @@
 from typing import Annotated, Literal
 
-from langchain_core.tools import InjectedToolCallId, tool
+from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 from pydantic import Field
@@ -11,6 +11,7 @@ from geo_agent.agent.error_helpers import (
     tool_error_command,
 )
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.geometry_ops import overlay as do_overlay
 
@@ -93,7 +94,6 @@ async def spatial_overlay(
             "dataset_id": rid,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
         },
         state=state,
         tool_call_id=tool_call_id,

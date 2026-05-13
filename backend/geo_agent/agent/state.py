@@ -59,6 +59,32 @@ def merge_active_layers(left: list[str], right: list[str]) -> list[str]:
     return list(seen)
 
 
+TOOL_EVENTS_CAP = 50
+
+
+def append_tool_events(
+    left: list[dict[str, Any]], right: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Append tool lifecycle events keyed by `id`. A second write for the same
+    id (running → ok/error) overwrites the first while preserving its position.
+    Total distinct events are capped at TOOL_EVENTS_CAP, oldest dropped first."""
+    left = left or []
+    if right is None:
+        return left
+    # OrderedDict preserves insertion order on update — important so a finishing
+    # event doesn't reorder ahead of newer running events.
+    merged: dict[str, dict[str, Any]] = {}
+    for e in left:
+        merged[e["id"]] = e
+    for e in right:
+        if e["id"] in merged:
+            merged[e["id"]] = e
+        else:
+            merged[e["id"]] = e  # appends to end
+    items = list(merged.values())
+    return items[-TOOL_EVENTS_CAP:]
+
+
 class AgentState(TypedDict):
     messages: Annotated[list, add_messages]
     remaining_steps: RemainingSteps
@@ -68,6 +94,7 @@ class AgentState(TypedDict):
     # Full inspect_dataset payloads, for the frontend widget only — the model gets back just a
     # short confirmation, so a 50-row feature table never lands in its context.
     inspections: Annotated[list[dict[str, Any]], append_inspections]
+    tool_events: Annotated[list[dict[str, Any]], append_tool_events]
 
 
 def build_initial_state() -> AgentState:
@@ -78,4 +105,5 @@ def build_initial_state() -> AgentState:
         "active_layers": [],
         "errors": [],
         "inspections": [],
+        "tool_events": [],
     }  # type: ignore[typeddict-item]

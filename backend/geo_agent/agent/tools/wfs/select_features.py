@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 
-from langchain_core.tools import InjectedToolCallId, tool
+from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 from pydantic import BaseModel, BeforeValidator, Field
@@ -10,6 +10,7 @@ from shapely.ops import unary_union
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.agent.tools._input_coercion import coerce_json_obj
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.ogc_filter import AttributeFilter, AttrOp, SpatialFilter
 from geo_agent.services.wfs_client import TooManyFeaturesError, WFSRequestError
@@ -106,7 +107,7 @@ async def select_features(
       {"property": "type", "op": "eq", "value": "parc"}
       Operators: eq, neq, lt, gt, lte, gte, like (NO 'in' — use filter_attributes for that).
 
-    Returns: {"dataset_id", "alias", "feature_count", "bbox", "attribute_schema"}.
+    Returns: {"dataset_id", "alias", "feature_count"}.
     On failure, an error is stored in state.errors and surfaced as a ToolMessage with code:
       too_many_features, dataset_not_found, unsupported_geometry, bad_input, wfs_error.
     """
@@ -281,8 +282,6 @@ async def select_features(
             "dataset_id": rid,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
-            "attribute_schema": meta.attribute_schema,
         },
         state=state,
         tool_call_id=tool_call_id,

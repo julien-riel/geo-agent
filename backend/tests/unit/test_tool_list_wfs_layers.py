@@ -24,7 +24,7 @@ def services_with_mock_wfs(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> S
 
 
 async def test_list_wfs_layers_returns_summary(services_with_mock_wfs: Services) -> None:
-    result = await list_wfs_layers.ainvoke({})
+    result = await list_wfs_layers.coroutine()
 
     assert isinstance(result, list)
     assert len(result) == 2
@@ -47,6 +47,6 @@ async def test_list_wfs_layers_includes_abstract(monkeypatch: pytest.MonkeyPatch
     services = Services(settings=Settings(), wfs=wfs_mock, store=None)  # type: ignore[arg-type]
     monkeypatch.setattr("geo_agent.agent.tools.wfs.list_layers.get_services", lambda: services)
 
-    out = await list_wfs_layers.ainvoke({})
+    out = await list_wfs_layers.coroutine()
 
     assert out == [{"name": "montreal:parcs", "title": "Parcs", "abstract": "Parcs et espaces verts de la Ville"}]

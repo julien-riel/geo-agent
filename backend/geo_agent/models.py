@@ -40,6 +40,10 @@ class DatasetMetaLite(BaseModel):
     layer: str | None
     operation: str
     parent_ids: list[str] = Field(default_factory=list)
+    # tool_call_id is set by dataset_created_command so the frontend can
+    # match a dataset card to its originating tool call. It is None for
+    # datasets loaded via REST (no tool call) or rehydrated from disk.
+    tool_call_id: str | None = None
 
 
 class ToolError(BaseModel):

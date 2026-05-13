@@ -1,6 +1,6 @@
 from typing import Annotated, Any, Literal
 
-from langchain_core.tools import InjectedToolCallId, tool
+from langchain_core.tools import InjectedToolCallId
 from langgraph.types import Command
 from pydantic import Field
 
@@ -10,6 +10,7 @@ from geo_agent.agent.error_helpers import (
     tool_error_command,
 )
 from geo_agent.agent.registry import get_services
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 from geo_agent.models import ToolError
 
 FEATURE_LIST_CAP = 50

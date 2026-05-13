@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from langchain_core.tools import InjectedToolCallId, tool
+from langchain_core.tools import InjectedToolCallId
 from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
 from pydantic import BeforeValidator
@@ -8,6 +8,7 @@ from pydantic import BeforeValidator
 from geo_agent.agent.error_helpers import dataset_created_command, tool_error_command
 from geo_agent.agent.registry import get_services
 from geo_agent.agent.tools._input_coercion import coerce_json_obj
+from geo_agent.agent.tools._instrumentation import instrumented_tool as tool
 from geo_agent.models import DatasetMetaLite, ToolError
 from geo_agent.services.spatial_ops import AttributePredicate, filter_by_attribute
 
@@ -76,7 +77,6 @@ async def filter_attributes(
             "dataset_id": new_id,
             "alias": meta.alias,
             "feature_count": meta.feature_count,
-            "bbox": list(meta.bbox),
         },
         state=state,
         tool_call_id=tool_call_id,

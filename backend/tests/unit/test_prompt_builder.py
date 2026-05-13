@@ -128,3 +128,14 @@ def test_system_prompt_mentions_new_tools() -> None:
 def test_system_prompt_has_empty_result_code() -> None:
     from geo_agent.agent.prompts import SYSTEM_PROMPT
     assert "empty_result" in SYSTEM_PROMPT
+
+
+def test_system_prompt_has_communication_style_section() -> None:
+    from geo_agent.agent.prompts import SYSTEM_PROMPT
+
+    assert "# Communication style" in SYSTEM_PROMPT
+    # Concrete anti-duplication guidance present
+    assert "do not repeat" in SYSTEM_PROMPT.lower() or "ne répète" in SYSTEM_PROMPT.lower()
+    # Specific forbidden things named
+    for token in ("feature_count", "bbox", "tool"):
+        assert token in SYSTEM_PROMPT

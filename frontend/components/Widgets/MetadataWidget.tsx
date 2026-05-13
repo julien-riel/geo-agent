@@ -21,7 +21,6 @@ interface Props {
   // self-hydrate from /api/datasets/{id}/meta when the payload is incomplete.
   data: Partial<DatasetMetaPayload> | undefined;
   datasetId: string;
-  status: "executing" | "complete" | "inProgress";
   onShowOnMap?: (id: string) => void;
   onFitMap?: (bbox: [number, number, number, number]) => void;
 }
@@ -40,7 +39,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1000 / 1000).toFixed(1)} MB`;
 }
 
-export function MetadataWidget({ data: rawData, datasetId, status, onShowOnMap, onFitMap }: Props) {
+export function MetadataWidget({ data: rawData, datasetId, onShowOnMap, onFitMap }: Props) {
   const [showSchema, setShowSchema] = useState(false);
   const [hydrated, setHydrated] = useState<DatasetMetaPayload | null>(null);
 
@@ -60,13 +59,7 @@ export function MetadataWidget({ data: rawData, datasetId, status, onShowOnMap, 
     return () => { cancelled = true; };
   }, [meta, datasetId]);
 
-  if (status === "executing" || status === "inProgress" || !meta) {
-    return (
-      <div data-testid="metadata-skeleton" style={{ padding: 12, background: "#f1f5f9", borderRadius: 8 }}>
-        <em style={{ color: "#94a3b8" }}>Chargement…</em>
-      </div>
-    );
-  }
+  if (!meta) return null;
 
   if (showSchema) {
     return <SchemaWidget data={meta} datasetId={datasetId} />;

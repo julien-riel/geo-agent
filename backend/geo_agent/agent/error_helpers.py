@@ -74,7 +74,9 @@ def dataset_created_command(
     """Register a newly produced dataset in state.datasets and feed result back to the LLM."""
     current = list(state.get("datasets") or [])
     if not any(d.get("id") == meta.id for d in current):
-        current.append(meta.model_dump(mode="json"))
+        ds = meta.model_dump(mode="json")
+        ds["tool_call_id"] = tool_call_id
+        current.append(ds)
     return Command(
         update={
             "datasets": current,
