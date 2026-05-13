@@ -1,7 +1,9 @@
 from geo_agent.agent.state import (
     ERROR_HISTORY_CAP,
+    TOOL_EVENTS_CAP,
     AgentState,
     append_errors,
+    append_tool_events,
     build_initial_state,
     merge_active_layers,
     merge_datasets,
@@ -16,6 +18,7 @@ def test_initial_state_has_empty_collections() -> None:
     assert s["active_layers"] == []
     assert s["errors"] == []
     assert s["messages"] == []
+    assert s["tool_events"] == []
 
 
 def test_state_typed_dict_accepts_dataset() -> None:
@@ -88,9 +91,6 @@ def test_merge_active_layers() -> None:
     assert merge_active_layers(["a", "b"], ["a"]) == ["a"]            # hide b
     assert merge_active_layers(["a", "b"], []) == []                  # clear
     assert merge_active_layers(None, ["a"]) == ["a"]  # type: ignore[arg-type]
-
-
-from geo_agent.agent.state import TOOL_EVENTS_CAP, append_tool_events
 
 
 def _ev(eid: str, status: str = "running", **kw) -> dict:
