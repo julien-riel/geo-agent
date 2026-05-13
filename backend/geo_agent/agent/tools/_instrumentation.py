@@ -9,6 +9,10 @@ Implementation note: ``StructuredTool`` is a frozen Pydantic model, so we
 cannot monkey-patch ``.invoke``/``.ainvoke`` on the instance. Instead we
 build a one-off subclass of the tool's runtime class and re-instantiate it
 with the same field values. The subclass overrides ``invoke``/``ainvoke``.
+
+Note: the dynamic Instrumented subclass is not picklable. LangGraph does
+not pickle bound tools — only run state — so this is fine; do not store
+decorated tool instances in checkpoints.
 """
 
 from __future__ import annotations
@@ -88,15 +92,20 @@ def _summarize_describe_wfs_layer(args: dict[str, Any], result: Any) -> tuple[st
     return f"layer={args.get('layer')}", "schema returned"
 
 
+def _summarize_dataset_tool(args: dict[str, Any], result: Any) -> tuple[str, str]:
+    """Generic summarizer for tools that take typed args and return a dataset payload."""
+    args_summary = ", ".join(
+        f"{k}={v!r}" for k, v in _summarize_args(args).items()
+    )[:200]
+    return args_summary, _peek_dataset_result(result)
+
+
 SUMMARIZERS["select_features"] = _summarize_select_features
 SUMMARIZERS["filter_attributes"] = _summarize_filter_attributes
 SUMMARIZERS["describe_wfs_layer"] = _summarize_describe_wfs_layer
 # Spatial/derived tools share the dataset-result shape — reuse the peek.
 for _name in ("spatial_overlay", "spatial_join", "transform_geometry"):
-    SUMMARIZERS[_name] = lambda a, r, name=_name: (
-        ", ".join(f"{k}={v!r}" for k, v in _summarize_args(a).items())[:200],
-        _peek_dataset_result(r),
-    )
+    SUMMARIZERS[_name] = _summarize_dataset_tool
 
 
 def _build_event(
@@ -110,8 +119,10 @@ def _build_event(
     ended_at: float | None = None,
     result_summary: str | None = None,
     error: dict[str, Any] | None = None,
+    args_summary: str | None = None,
 ) -> dict[str, Any]:
-    args_summary = ", ".join(f"{k}={v!r}" for k, v in args_raw.items())[:200]
+    if args_summary is None:
+        args_summary = ", ".join(f"{k}={v!r}" for k, v in args_raw.items())[:200]
     ev: dict[str, Any] = {
         "id": event_id,
         "tool_call_id": tool_call_id,
@@ -165,22 +176,6 @@ def _extract_call(call: Any) -> tuple[str, dict[str, Any]]:
     return "unknown", {}
 
 
-def _inject_tool_call_id(call: Any, tool_call_id: str, args_schema_fields: set[str]) -> Any:
-    """If the underlying tool declares a plain ``tool_call_id`` field, supply it.
-
-    LangChain's ``InjectedToolCallId`` annotation triggers automatic injection,
-    but tools that simply declare ``tool_call_id: str`` will otherwise fail
-    validation. We inject from the ToolCall envelope to support both styles.
-    """
-    if not isinstance(call, dict) or "tool_call_id" not in args_schema_fields:
-        return call
-    args = dict(call.get("args") or {})
-    if "tool_call_id" not in args:
-        args["tool_call_id"] = tool_call_id
-        return {**call, "args": args}
-    return call
-
-
 def instrumented_tool(*args, **kwargs):
     """Drop-in replacement for ``langchain_core.tools.tool``.
 
@@ -206,11 +201,6 @@ def _wrap(base_tool):
     """Return a subclass instance of ``base_tool`` whose invoke emits tool_events."""
     tool_name = base_tool.name
     base_cls = type(base_tool)
-    schema_fields: set[str] = set()
-    try:
-        schema_fields = set(base_tool.args_schema.model_fields.keys())
-    except Exception:
-        schema_fields = set()
 
     def _finalize(
         result: Any,
@@ -240,8 +230,8 @@ def _wrap(base_tool):
                     "code": err.get("code", "unknown"),
                     "message": err.get("message", ""),
                 },
+                args_summary=args_summary,
             )
-            final["args_summary"] = args_summary
             return _attach_event_to_command(result, final)
         final = _build_event(
             event_id=eid,
@@ -252,8 +242,8 @@ def _wrap(base_tool):
             started_at=started_at,
             ended_at=ended_at,
             result_summary=result_summary,
+            args_summary=args_summary,
         )
-        final["args_summary"] = args_summary
         if isinstance(result, Command):
             return _attach_event_to_command(result, final)
         # LangChain auto-wraps a scalar return into a ToolMessage when invoked
@@ -300,7 +290,6 @@ def _wrap(base_tool):
     class Instrumented(base_cls):  # type: ignore[misc, valid-type]
         def invoke(self, input, config=None, **kw):  # type: ignore[override]
             tool_call_id, args_raw = _extract_call(input)
-            input2 = _inject_tool_call_id(input, tool_call_id, schema_fields)
             eid, started_at = _new_event()
             _emit_running(
                 _build_event(
@@ -313,7 +302,9 @@ def _wrap(base_tool):
                 )
             )
             try:
-                result = orig_invoke(self, input2, config=config, **kw)
+                # Pass the original call envelope through; production tools rely
+                # on InjectedToolCallId for tool_call_id, no mutation needed.
+                result = orig_invoke(self, input, config=config, **kw)
             except BaseException as exc:
                 _emit_running(_on_error_event(exc, eid, tool_call_id, args_raw, started_at))
                 raise
@@ -321,7 +312,6 @@ def _wrap(base_tool):
 
         async def ainvoke(self, input, config=None, **kw):  # type: ignore[override]
             tool_call_id, args_raw = _extract_call(input)
-            input2 = _inject_tool_call_id(input, tool_call_id, schema_fields)
             eid, started_at = _new_event()
             _emit_running(
                 _build_event(
@@ -334,7 +324,7 @@ def _wrap(base_tool):
                 )
             )
             try:
-                result = await orig_ainvoke(self, input2, config=config, **kw)
+                result = await orig_ainvoke(self, input, config=config, **kw)
             except BaseException as exc:
                 _emit_running(_on_error_event(exc, eid, tool_call_id, args_raw, started_at))
                 raise
