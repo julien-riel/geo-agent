@@ -12,9 +12,12 @@ import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
 import { InspectDatasetWidget } from "@/components/Widgets/InspectDatasetWidget";
 import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
+import { ToolPill } from "@/components/ToolActivity/ToolPill";
+import { ToolActivityLog } from "@/components/ToolActivity/ToolActivityLog";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { pickBboxToFit } from "@/lib/mapFit";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
+import type { ToolEvent } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
@@ -54,6 +57,17 @@ function MarkdownCode({
 }
 const markdownTagRenderers = { code: MarkdownCode };
 
+function findDatasetByToolResult(
+  datasets: ReadonlyArray<{ id: string; tool_call_id?: string | null }>,
+  result: unknown,
+): { id: string } | null {
+  if (!result || typeof result !== "object") return null;
+  const r = result as { dataset_id?: string; id?: string };
+  const targetId = r.dataset_id ?? r.id;
+  if (!targetId) return null;
+  return datasets.find((d) => d.id === targetId) ?? null;
+}
+
 export function GeoPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
 
@@ -77,11 +91,13 @@ function GeoPageBody() {
   });
   const [drawing, setDrawing] = useState(false);
   const [hydratedDatasets, setHydratedDatasets] = useState<DatasetMetaLite[] | null>(null);
+  const [logOpen, setLogOpen] = useState(false);
   const pushed = useRef(false);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
   const datasets = agentState?.datasets ?? [];
   const activeLayers = agentState?.active_layers ?? [];
+  const toolEvents = ((agentState as { tool_events?: ToolEvent[] } | undefined)?.tool_events) ?? [];
 
   // Step 1: fetch datasets that already live on disk (e.g. from prior browser
   // sessions — the result store has no session isolation in this POC).
@@ -161,56 +177,43 @@ function GeoPageBody() {
     if (bbox) onFitMap(bbox);
   }, [activeLayers, datasets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useCopilotAction({
-    name: "describe_dataset",
-    // available: "disabled" → render-only (no handler); required by CopilotKit 1.57+
-    available: "disabled",
-    render: ({ args, result, status }) => {
-      if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""} />;
+  const renderDatasetResult = (name: string) =>
+    ({ result, status }: { result: unknown; status: string }) => {
+      if (status === "executing" || !result) return <></>;
+      const ds = findDatasetByToolResult(agentState?.datasets ?? [], result);
+      // describe_dataset returns the full meta as result; if it's not in state.datasets
+      // (because the tool doesn't create a new dataset, it inspects an existing one),
+      // render the payload directly.
+      if (!ds && name === "describe_dataset") {
+        const r = result as { id?: string };
+        if (!r.id) return <></>;
+        return (
+          <MetadataWidget
+            data={result as never}
+            datasetId={r.id}
+            onShowOnMap={onShowOnMap}
+            onFitMap={onFitMap}
+          />
+        );
       }
+      if (!ds) return <></>;
       return (
         <MetadataWidget
-          data={result as never}
-          datasetId={(args as { id_or_alias?: string })?.id_or_alias ?? ""}
+          data={ds as never}
+          datasetId={ds.id}
           onShowOnMap={onShowOnMap}
           onFitMap={onFitMap}
         />
       );
-    },
-  });
+    };
 
-  useCopilotAction({
-    name: "select_features",
-    available: "disabled",
-    render: ({ result, status }) => {
-      if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId="" />;
-      }
-      const r = result as { dataset_id?: string; meta?: unknown };
-      const meta = r.meta ?? r;
-      const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
-      return (
-        <MetadataWidget data={meta as never} datasetId={id} onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
-      );
-    },
-  });
-
-  useCopilotAction({
-    name: "filter_attributes",
-    available: "disabled",
-    render: ({ result, status }) => {
-      if (status === "executing" || !result) {
-        return <MetadataWidget data={result as never} datasetId="" />;
-      }
-      const r = result as { dataset_id?: string; meta?: unknown };
-      const meta = r.meta ?? r;
-      const id = (meta as { id?: string })?.id ?? r.dataset_id ?? "";
-      return (
-        <MetadataWidget data={meta as never} datasetId={id} onShowOnMap={onShowOnMap} onFitMap={onFitMap} />
-      );
-    },
-  });
+  useCopilotAction({ name: "describe_dataset",   available: "disabled", render: renderDatasetResult("describe_dataset") });
+  useCopilotAction({ name: "select_features",    available: "disabled", render: renderDatasetResult("select_features") });
+  useCopilotAction({ name: "filter_attributes",  available: "disabled", render: renderDatasetResult("filter_attributes") });
+  useCopilotAction({ name: "aggregate",          available: "disabled", render: renderDatasetResult("aggregate") });
+  useCopilotAction({ name: "spatial_overlay",    available: "disabled", render: renderDatasetResult("spatial_overlay") });
+  useCopilotAction({ name: "spatial_join",       available: "disabled", render: renderDatasetResult("spatial_join") });
+  useCopilotAction({ name: "transform_geometry", available: "disabled", render: renderDatasetResult("transform_geometry") });
 
   // inspect_dataset has no useCopilotAction render: its tool result is only a tiny summary
   // (so a 50-row table never enters the model's context). The full payload is pushed to
@@ -340,6 +343,37 @@ function GeoPageBody() {
           onDelete={onDeleteDataset}
           onRename={onRenameDataset}
         />
+
+        <div
+          style={{
+            position: "fixed",
+            bottom: 80,
+            right: 24,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            zIndex: 999,
+          }}
+        >
+          <ToolPill events={toolEvents} />
+          {toolEvents.length > 0 && (
+            <button
+              onClick={() => setLogOpen((v) => !v)}
+              style={{
+                background: "#fff",
+                border: "1px solid #cbd5e1",
+                borderRadius: 999,
+                padding: "4px 10px",
+                fontSize: 11,
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              }}
+            >
+              {toolEvents.length} étapes ▾
+            </button>
+          )}
+        </div>
+        <ToolActivityLog events={toolEvents} open={logOpen} onClose={() => setLogOpen(false)} />
 
         <CopilotSidebar
           defaultOpen={true}
