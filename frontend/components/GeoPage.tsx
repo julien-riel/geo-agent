@@ -220,10 +220,10 @@ function GeoPageBody() {
       );
     };
 
+  // aggregate is omitted — it returns {value, groups}, not a dataset.
   useCopilotAction({ name: "describe_dataset",   available: "disabled", render: renderDatasetResult("describe_dataset") });
   useCopilotAction({ name: "select_features",    available: "disabled", render: renderDatasetResult("select_features") });
   useCopilotAction({ name: "filter_attributes",  available: "disabled", render: renderDatasetResult("filter_attributes") });
-  useCopilotAction({ name: "aggregate",          available: "disabled", render: renderDatasetResult("aggregate") });
   useCopilotAction({ name: "spatial_overlay",    available: "disabled", render: renderDatasetResult("spatial_overlay") });
   useCopilotAction({ name: "spatial_join",       available: "disabled", render: renderDatasetResult("spatial_join") });
   useCopilotAction({ name: "transform_geometry", available: "disabled", render: renderDatasetResult("transform_geometry") });
