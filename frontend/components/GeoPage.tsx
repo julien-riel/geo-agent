@@ -12,12 +12,13 @@ import { DrawTool } from "@/components/Map/DrawTool";
 import { MapView } from "@/components/Map/MapView";
 import { InspectDatasetWidget } from "@/components/Widgets/InspectDatasetWidget";
 import { MetadataWidget } from "@/components/Widgets/MetadataWidget";
+import { ChartWidget } from "@/components/Widgets/ChartWidget";
 import { ToolPill } from "@/components/ToolActivity/ToolPill";
 import { ToolActivityLog } from "@/components/ToolActivity/ToolActivityLog";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { pickBboxToFit } from "@/lib/mapFit";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
-import type { ToolEvent } from "@/lib/types";
+import type { ChartData, ToolEvent } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
@@ -207,6 +208,16 @@ function GeoPageBody() {
   useCopilotAction({ name: "spatial_overlay",    available: "disabled", render: renderDatasetResult() });
   useCopilotAction({ name: "spatial_join",       available: "disabled", render: renderDatasetResult() });
   useCopilotAction({ name: "transform_geometry", available: "disabled", render: renderDatasetResult() });
+
+  const renderChartResult =
+    () =>
+    ({ result, status }: { result: unknown; status: string }) => {
+      if (status === "executing" || !result || typeof result !== "object") return <></>;
+      return <ChartWidget data={result as ChartData} />;
+    };
+
+  useCopilotAction({ name: "plot_attribute_distribution", available: "disabled", render: renderChartResult() });
+  useCopilotAction({ name: "plot_aggregation",            available: "disabled", render: renderChartResult() });
 
   // inspect_dataset has no useCopilotAction render: its tool result is only a tiny summary
   // (so a 50-row table never enters the model's context). The full payload is pushed to
