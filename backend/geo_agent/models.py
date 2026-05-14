@@ -60,3 +60,22 @@ class WFSLayer(BaseModel):
     bbox: tuple[float, float, float, float] | None = None
     attribute_schema: dict[str, str] | None = None  # filled lazily
     geom_property: str | None = None  # filled lazily
+
+
+class ChartSeriesPoint(BaseModel):
+    label: str
+    value: float
+    percent: float | None = None
+
+
+class ChartData(BaseModel):
+    chart_type: Literal["bar", "pie", "grouped_bar"]
+    title: str
+    dataset_id: str
+    dataset_alias: str | None
+    source: Literal["attribute_distribution", "aggregation"]
+    attribute: str | None = None
+    aggregation: dict[str, Any] | None = None
+    total_features: int
+    series: list[ChartSeriesPoint]
+    truncated: bool = False
