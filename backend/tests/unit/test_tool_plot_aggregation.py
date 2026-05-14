@@ -77,3 +77,12 @@ async def test_unknown_group_by(services: Services, populated_dataset: str) -> N
     )
     assert r.update["errors"][0]["code"] == "bad_input"
     assert "nope" in r.update["errors"][0]["message"]
+
+
+async def test_unknown_metric(services: Services, populated_dataset: str) -> None:
+    r = await plot_aggregation.coroutine(
+        dataset_id=populated_dataset, group_by="t", op="sum", metric="nope", tool_call_id="t"
+    )
+    assert r.update["errors"][0]["code"] == "bad_input"
+    assert "nope" in r.update["errors"][0]["message"]
+    assert "metric" in r.update["errors"][0]["message"]
