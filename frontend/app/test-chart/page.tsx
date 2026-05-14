@@ -1,5 +1,6 @@
 "use client";
 
+import { notFound } from "next/navigation";
 import { ChartWidget } from "@/components/Widgets/ChartWidget";
 import type { ChartData } from "@/lib/types";
 
@@ -24,7 +25,7 @@ const EMPTY: ChartData = { ...SAMPLE, series: [] };
 
 export default function TestChartPage() {
   if (process.env.NODE_ENV === "production") {
-    return <div>not available</div>;
+    notFound();
   }
   return (
     <main style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, maxWidth: 420 }}>

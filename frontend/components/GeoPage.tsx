@@ -18,7 +18,8 @@ import { ToolActivityLog } from "@/components/ToolActivity/ToolActivityLog";
 import { getOrCreateThreadId, resetThreadId } from "@/lib/threadId";
 import { pickBboxToFit } from "@/lib/mapFit";
 import { AgentState, DatasetMetaLite } from "@/lib/types";
-import type { ChartData, ToolEvent } from "@/lib/types";
+import { ChartData } from "@/lib/types";
+import type { ToolEvent } from "@/lib/types";
 import { SelectedFeatureProvider } from "@/lib/selectedFeature";
 import { FeatureDrawer } from "@/components/Map/FeatureDrawer";
 
@@ -212,8 +213,10 @@ function GeoPageBody() {
   const renderChartResult =
     () =>
     ({ result, status }: { result: unknown; status: string }) => {
-      if (status === "executing" || !result || typeof result !== "object") return <></>;
-      return <ChartWidget data={result as ChartData} />;
+      if (status === "executing") return <></>;
+      const parsed = ChartData.safeParse(result);
+      if (!parsed.success) return <></>;
+      return <ChartWidget data={parsed.data} />;
     };
 
   useCopilotAction({ name: "plot_attribute_distribution", available: "disabled", render: renderChartResult() });
