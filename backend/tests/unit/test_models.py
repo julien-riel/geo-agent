@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 import pytest
 
 from geo_agent.models import (
+    ChartData,
+    ChartSeriesPoint,
     DatasetMeta,
     LineageInfo,
     SourceInfo,
@@ -100,9 +102,6 @@ def test_dataset_meta_lite_accepts_parent_ids() -> None:
         parent_ids=["result_001"],
     )
     assert m.parent_ids == ["result_001"]
-
-
-from geo_agent.models import ChartData, ChartSeriesPoint
 
 
 def test_chart_data_minimal_attribute_distribution() -> None:
