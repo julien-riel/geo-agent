@@ -18,6 +18,8 @@ def test_all_tools_re_exported_and_named() -> None:
         "show_on_map",
         "hide_on_map",
         "inspect_dataset",
+        "plot_attribute_distribution",
+        "plot_aggregation",
     }
     assert expected.issubset(names)
 

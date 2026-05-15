@@ -282,6 +282,28 @@ Examples:
   {"dataset_id": "result_003", "view": "schema"}
   {"dataset_id": "result_003", "view": "feature", "feature_index": 0}
 
+### plot_attribute_distribution
+Render a bar or pie chart of an attribute's value frequencies. Use for "fréquence",
+"répartition", "distribution", "breakdown", "camembert". The widget is drawn for the user.
+For numerical attributes prefer `describe_dataset` (min/max) or `plot_aggregation`.
+
+Example — bar of road types:
+  {"dataset_id": "result_003", "attribute": "type", "chart_type": "bar"}
+
+Example — pie of categories:
+  {"dataset_id": "result_003", "attribute": "categorie", "chart_type": "pie"}
+
+### plot_aggregation
+Render a grouped bar chart of an aggregation partitioned by `group_by`. Use for
+"total par <attr>", "compare", "proportion", "moyenne par <attr>". op="count" ignores
+metric; sum/mean/min/max require a metric attribute.
+
+Example — count by type:
+  {"dataset_id": "result_003", "group_by": "type", "op": "count"}
+
+Example — sum of length by type:
+  {"dataset_id": "result_003", "group_by": "type", "op": "sum", "metric": "longueur"}
+
 # Choosing the right tool — mapping common requests
 
 (`<zone>` = most recent `operation="user_drawing"` dataset; `X`, `Y` = existing datasets.)
@@ -315,6 +337,8 @@ Examples:
   `distance_meters=N`, OR buffer X → dissolve → `select_features` with that as `geometry_source`
   + `intersects` (use the buffer route when X is a layer/result rather than a single drawn shape)
 - "affiche / montre X sur la carte" → `show_on_map`; "enlève / cache X" → `hide_on_map`
+- "fréquence / répartition / distribution / camembert / breakdown par <attr>" → `plot_attribute_distribution`
+- "compare / total par <attr> / proportion / moyenne par <attr>" → `plot_aggregation`
 - "montre-moi les données / quelques lignes / un exemple de X" → `inspect_dataset`
 - "c'est quoi les attributs / colonnes de X ?" → `describe_dataset`
 - "supprime / efface / enlève le dataset X" → `delete_dataset`

@@ -82,3 +82,30 @@ export const AgentState = z.object({
   tool_events: z.array(ToolEvent).default([]),
 });
 export type AgentState = z.infer<typeof AgentState>;
+
+export const ChartSeriesPoint = z.object({
+  label: z.string(),
+  value: z.number(),
+  percent: z.number().nullable(),
+});
+export type ChartSeriesPoint = z.infer<typeof ChartSeriesPoint>;
+
+export const ChartData = z.object({
+  chart_type: z.enum(["bar", "pie", "grouped_bar"]),
+  title: z.string(),
+  dataset_id: z.string(),
+  dataset_alias: z.string().nullable(),
+  source: z.enum(["attribute_distribution", "aggregation"]),
+  attribute: z.string().nullable(),
+  aggregation: z
+    .object({
+      group_by: z.string(),
+      metric: z.string().nullable(),
+      op: z.string(),
+    })
+    .nullable(),
+  total_features: z.number(),
+  series: z.array(ChartSeriesPoint),
+  truncated: z.boolean(),
+});
+export type ChartData = z.infer<typeof ChartData>;

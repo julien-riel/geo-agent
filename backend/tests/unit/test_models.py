@@ -3,6 +3,8 @@ from datetime import UTC, datetime
 import pytest
 
 from geo_agent.models import (
+    ChartData,
+    ChartSeriesPoint,
     DatasetMeta,
     LineageInfo,
     SourceInfo,
@@ -100,3 +102,40 @@ def test_dataset_meta_lite_accepts_parent_ids() -> None:
         parent_ids=["result_001"],
     )
     assert m.parent_ids == ["result_001"]
+
+
+def test_chart_data_minimal_attribute_distribution() -> None:
+    cd = ChartData(
+        chart_type="bar",
+        title="Fréquence — type",
+        dataset_id="result_001",
+        dataset_alias=None,
+        source="attribute_distribution",
+        attribute="type",
+        total_features=5,
+        series=[ChartSeriesPoint(label="A", value=3, percent=0.6)],
+    )
+    dumped = cd.model_dump(mode="json")
+    assert dumped["chart_type"] == "bar"
+    assert dumped["source"] == "attribute_distribution"
+    assert dumped["aggregation"] is None
+    assert dumped["truncated"] is False
+    assert dumped["series"][0] == {"label": "A", "value": 3.0, "percent": 0.6}
+
+
+def test_chart_data_aggregation_with_truncation() -> None:
+    cd = ChartData(
+        chart_type="grouped_bar",
+        title="sum(longueur) par type",
+        dataset_id="result_001",
+        dataset_alias="rues",
+        source="aggregation",
+        aggregation={"group_by": "type", "metric": "longueur", "op": "sum"},
+        total_features=100,
+        series=[ChartSeriesPoint(label="Autres", value=12.0, percent=0.12)],
+        truncated=True,
+    )
+    assert cd.model_dump(mode="json")["aggregation"] == {
+        "group_by": "type", "metric": "longueur", "op": "sum"
+    }
+    assert cd.truncated is True
